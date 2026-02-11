@@ -1,22 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = [
   "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
-
-/* ---------- Skeleton (simple & guaranteed to work) ---------- */
-function Skeleton({ className = "" }) {
-  return (
-    <div
-      className={`rounded-lg bg-slate-200 animate-pulse ${className}`}
-    />
-  );
-}
 
 export default function Page() {
   const [files, setFiles] = useState([]);
@@ -24,13 +13,26 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [toast, setToast] = useState(null);
+  const [applications, setApplications] = useState([]);
 
-   // ✅ ADD THESE
-  const [parsedText, setParsedText] = useState("");
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
+  // ✅ FETCH FROM MONGODB WHEN PAGE LOADS
+  useEffect(() => {
+    fetchApplications();
+  }, []);
 
-  /* ---------- Helpers ---------- */
+  async function fetchApplications() {
+    try {
+      const res = await fetch("/api/applications");
+      const data = await res.json();
+
+      if (data.success) {
+        setApplications(data.applications);
+      }
+    } catch (err) {
+      console.error("Fetch error:", err);
+    }
+  }
+
   function showToast(message) {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
@@ -75,7 +77,6 @@ export default function Page() {
     });
   }
 
-  /* ---------- Drag & Drop ---------- */
   function handleDrag(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -99,60 +100,63 @@ export default function Page() {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
-  /* ---------- Submit (mock upload) ---------- */
   async function submitResumes() {
-  if (!files.length) {
-    showToast("No file selected");
-    return;
-  }
-
-  setLoading(true);
-  setProgress(0);
-
-  try {
-    for (let i = 0; i < files.length; i++) {
-      const currentFile = files[i];
-
-      console.log(`Uploading: ${currentFile.name}`);
-
-      const fd = new FormData();
-      fd.append("resume", currentFile);
-
-      const res = await fetch("/api/applications", {
-        method: "POST",
-        body: fd,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(
-          `${currentFile.name} failed: ${data.error || "Unknown error"}`
-        );
-      }
-
-      console.log(`Finished: ${currentFile.name}`, data);
-
-      // Update progress bar
-      const percent = Math.round(((i + 1) / files.length) * 100);
-      setProgress(percent);
+    if (!files.length) {
+      showToast("No file selected");
+      return;
     }
 
-    showToast("All resumes processed successfully!");
-    setFiles([]);
-  } catch (err) {
-    console.error("FRONTEND ERROR:", err);
-    showToast(err.message || "Processing failed");
-  } finally {
-    setLoading(false);
+    setLoading(true);
+    setProgress(0);
+
+    let fakeProgress = 0;
+
+    const interval = setInterval(() => {
+      fakeProgress += Math.random() * 6;
+      if (fakeProgress >= 90) fakeProgress = 90;
+      setProgress(Math.floor(fakeProgress));
+    }, 200);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const fd = new FormData();
+        fd.append("resume", files[i]);
+
+        const res = await fetch("/api/applications", {
+          method: "POST",
+          body: fd,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Upload failed");
+        }
+      }
+
+      clearInterval(interval);
+      setProgress(100);
+
+      // ✅ REFRESH FROM DATABASE AFTER UPLOAD
+      await fetchApplications();
+
+      setTimeout(() => {
+        showToast("All resumes processed successfully!");
+        setFiles([]);
+        setLoading(false);
+        setProgress(0);
+      }, 500);
+
+    } catch (err) {
+      clearInterval(interval);
+      console.error("Upload error:", err);
+      showToast(err.message);
+      setLoading(false);
+    }
   }
-}
-
-
 
   return (
     <div className="min-h-screen flex bg-slate-100">
-      {/* ---------- Sidebar ---------- */}
       <aside className="w-64 bg-white border-r flex flex-col">
         <nav className="mt-6 flex-1 text-sm">
           <a className="flex items-center gap-3 px-6 py-3 bg-[#F29035] text-white rounded-r-full">
@@ -161,73 +165,73 @@ export default function Page() {
         </nav>
       </aside>
 
-      {/* ---------- Main ---------- */}
       <main className="flex-1">
         <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white">
-          <h2 className="text-2xl font-semibold">Career Agents's</h2>
+          <h2 className="text-2xl font-semibold">Career Agent</h2>
         </div>
 
         <div className="px-10 -mt-16 space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* ---------- Upload Panel ---------- */}
+
+            {/* Upload Panel */}
             <section className="bg-white rounded-xl shadow-sm p-6">
               <h2 className="text-lg font-semibold mb-4">
                 Upload Resumes
               </h2>
 
-              {loading ? (
-                <Skeleton className="h-32 w-full" />
-              ) : (
-                <div
-                  onDragEnter={handleDrag}
-                  onDragOver={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDrop={handleDrop}
-                  className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition
-                    ${
-                      dragActive
-                        ? "border-[#0049af]"
-                        : "border-slate-300 hover:border-[#0049af]"
-                    }`}
-                >
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.doc,.docx"
-                    onChange={handleFileChange}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
-                  <p className="text-sm font-medium">
-                    Drag & drop resumes
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    or click to browse (PDF, DOC, DOCX)
-                  </p>
+              <div
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition
+      ${dragActive
+                    ? "border-[#0049af]"
+                    : "border-slate-300 hover:border-[#0049af]"}
+    `}
+              >
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx"
+                  onChange={handleFileChange}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+                <p className="text-sm font-medium">
+                  Drag & drop resumes
+                </p>
+                <p className="text-xs text-slate-400">
+                  or click to browse
+                </p>
+              </div>
+
+              {/* ✅ SELECTED FILES PREVIEW (THIS WAS MISSING) */}
+              {files.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {files.map((file, index) => (
+                    <div
+                      key={`${file.name}-${file.lastModified}`}
+                      className="flex items-center justify-between border rounded-lg px-4 py-2 text-sm bg-slate-50"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium truncate max-w-[200px]">
+                          {file.name}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-red-500 text-xs hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
-
-              {/* File List */}
-              <div className="mt-4 space-y-2">
-                {files.map((file, i) => (
-                  <div
-                    key={`${file.name}-${file.lastModified}`}
-                    className="flex justify-between border rounded-lg px-4 py-2 text-sm"
-                  >
-                    <span className="truncate">
-                      {file.name}
-                      <span className="ml-2 text-xs text-slate-400">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </span>
-                    </span>
-                    <button
-                      onClick={() => removeFile(i)}
-                      className="text-red-500 text-xs hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
 
               {/* Progress */}
               {loading && (
@@ -239,7 +243,7 @@ export default function Page() {
                     />
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    Uploading… {progress}%
+                    Processing… {progress}%
                   </p>
                 </div>
               )}
@@ -253,27 +257,28 @@ export default function Page() {
               </button>
             </section>
 
-            {/* ---------- Results Panel ---------- */}
+            {/* Recent Applications */}
             <section className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
               <h2 className="text-lg font-semibold mb-4">
                 Recently Uploaded Resumes
               </h2>
 
-              {loading ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-3/4" />
-                  <Skeleton className="h-10 w-2/3" />
-                </div>
-              ) : files.length ? (
-                <ul className="space-y-2 text-sm">
-                  {files.map((f, i) => (
+              {applications.length ? (
+                <ul className="space-y-3 text-sm">
+                  {applications.map((app) => (
                     <li
-                      key={i}
-                      className="border rounded-lg px-4 py-2"
+                      key={app._id}
+                      className="border rounded-lg px-4 py-3"
                     >
-                      {f.name}
+                      <div className="font-medium">
+                        {app.fullName || "No Name"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {app.email || "No Email"}
+                      </div>
+                      <div className="text-xs mt-1">
+                        Status: {app.status || "Processing"}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -283,6 +288,7 @@ export default function Page() {
                 </div>
               )}
             </section>
+
           </div>
         </div>
 

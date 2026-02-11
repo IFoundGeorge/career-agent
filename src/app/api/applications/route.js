@@ -80,6 +80,22 @@ import { UTApi } from "uploadthing/server";
 
 export const runtime = "nodejs";
 
+export async function GET() {
+  try {
+    await connectDB();
+
+    const applications = await Application.find().sort({ createdAt: -1 });
+
+    return Response.json({
+      success: true,
+      applications,
+    });
+  } catch (err) {
+    console.error("GET ERROR:", err);
+    return Response.json({ success: false }, { status: 500 });
+  }
+}
+
 export async function POST(req) {
   await connectDB();
 
@@ -196,8 +212,9 @@ export async function POST(req) {
     return NextResponse.json({
       success: true,
       totalProcessed: results.length,
-      results,
+      results
     });
+
 
   } catch (err) {
     console.error("SERVER ERROR:", err);
