@@ -7,23 +7,31 @@ const ApplicationSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+
     email: {
       type: String,
-      required: true,
+      required: false,
       lowercase: true,
+      trim: true,
     },
-    resumeFilePath: {
+
+    resumeText: {
+      type: String,
+    },
+
+    resumeFileLink: {   
       type: String,
       required: true,
     },
+
     status: {
       type: String,
-      enum: ["uploaded", "processing", "analyzed", "failed"],
+      enum: ["uploaded", "processing", "analyzed", "completed"],
       default: "uploaded",
     },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: true, updatedAt: false }, // ✅ adds createdAt
   }
 );
 

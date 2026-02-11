@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Upload } from "lucide-react";
 
-const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB (industry-safe default)
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = [
   "application/pdf",
   "application/msword",
@@ -19,6 +19,9 @@ export default function Page() {
   const [success, setSuccess] = useState(false);
   const [toast, setToast] = useState(null);
   const [parsed, setParsed] = useState(null);
+  const [parsedText, setParsedText] = useState("");
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
 
   /* ---------------- Toast ---------------- */
 
@@ -34,7 +37,7 @@ export default function Page() {
       return `${file.name}: invalid file type`;
     }
     if (file.size > MAX_FILE_SIZE) {
-      return `${file.name}: exceeds 10MB`;
+      return `${file.name}: exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB`;
     }
     return null;
   }
@@ -78,38 +81,50 @@ export default function Page() {
 
   /* ---------------- Submit + Parse ---------------- */
 
-  async function handleSubmit() {
-    if (!files.length) return;
+async function handleSubmit() {
 
-    setLoading(true);
-    setProgress(10);
-    setParsed(null);
-
-    const fd = new FormData();
-    fd.append("file", files[0]);
-
-    const progressTimer = setInterval(() => {
-      setProgress((p) => Math.min(p + 15, 90));
-    }, 200);
-
-    try {
-      const res = await fetch("/api/resume/parse", {
-        method: "POST",
-        body: fd,
-      });
-
-      const data = await res.json();
-      setParsed(data.parsed);
-      setSuccess(true);
-      showToast("Resume parsed successfully!");
-    } catch {
-      showToast("Upload failed", "error");
-    } finally {
-      clearInterval(progressTimer);
-      setProgress(100);
-      setLoading(false);
-    }
+  if (!files || !files.length) {
+    showToast("No file selected", "error");
+    return;
   }
+
+  setLoading(true);
+
+  const fd = new FormData();
+  fd.append("resume", files[0]); // MUST match backend key
+
+  try {
+    const res = await fetch("/api/applications", {
+      method: "POST",
+      body: fd,
+    });
+
+    const data = await res.json();
+
+    console.log("API RESPONSE 👉", data);
+
+    if (!res.ok) {
+      throw new Error(data.error || "Upload failed");
+    }
+
+    if (!data.success) {
+      throw new Error("Failed to process resume");
+    }
+
+    // ✅ set states from backend
+    setParsedText(data.resumeText);
+    setEmail(data.email || "");
+    setFullName(data.fullName || "");
+
+    showToast("Resume parsed successfully!");
+  } catch (err) {
+    console.error("FRONTEND ERROR:", err);
+    showToast(err.message || "Failed to parse resume", "error");
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   /* ---------------- Success ---------------- */
 
