@@ -25,6 +25,11 @@ export default function Page() {
   const [progress, setProgress] = useState(0);
   const [toast, setToast] = useState(null);
 
+   // ✅ ADD THESE
+  const [parsedText, setParsedText] = useState("");
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+
   /* ---------- Helpers ---------- */
   function showToast(message) {
     setToast(message);
@@ -96,28 +101,54 @@ export default function Page() {
 
   /* ---------- Submit (mock upload) ---------- */
   async function submitResumes() {
-    if (!files.length) return;
-
-    setLoading(true);
-    setProgress(0);
-
-    const timer = setInterval(() => {
-      setProgress((p) => Math.min(p + 12, 90));
-    }, 200);
-
-    try {
-      await new Promise((r) => setTimeout(r, 2000));
-      showToast("Resumes uploaded successfully");
-      setFiles([]);
-    } catch {
-      showToast("Upload failed");
-    } finally {
-      clearInterval(timer);
-      setProgress(100);
-      setLoading(false);
-      setTimeout(() => setProgress(0), 500);
-    }
+  if (!files.length) {
+    showToast("No file selected");
+    return;
   }
+
+  setLoading(true);
+  setProgress(0);
+
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const currentFile = files[i];
+
+      console.log(`Uploading: ${currentFile.name}`);
+
+      const fd = new FormData();
+      fd.append("resume", currentFile);
+
+      const res = await fetch("/api/applications", {
+        method: "POST",
+        body: fd,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(
+          `${currentFile.name} failed: ${data.error || "Unknown error"}`
+        );
+      }
+
+      console.log(`Finished: ${currentFile.name}`, data);
+
+      // Update progress bar
+      const percent = Math.round(((i + 1) / files.length) * 100);
+      setProgress(percent);
+    }
+
+    showToast("All resumes processed successfully!");
+    setFiles([]);
+  } catch (err) {
+    console.error("FRONTEND ERROR:", err);
+    showToast(err.message || "Processing failed");
+  } finally {
+    setLoading(false);
+  }
+}
+
+
 
   return (
     <div className="min-h-screen flex bg-slate-100">
