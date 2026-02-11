@@ -9,11 +9,11 @@ const ALLOWED_TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
-/* ---------- Skeleton (border only) ---------- */
+/* ---------- Skeleton (simple & guaranteed to work) ---------- */
 function Skeleton({ className = "" }) {
   return (
     <div
-      className={`border border-dashed border-slate-300 rounded-lg animate-pulse ${className}`}
+      className={`rounded-lg bg-slate-200 animate-pulse ${className}`}
     />
   );
 }
@@ -121,7 +121,6 @@ export default function Page() {
 
   return (
     <div className="min-h-screen flex bg-slate-100">
-
       {/* ---------- Sidebar ---------- */}
       <aside className="w-64 bg-white border-r flex flex-col">
         <nav className="mt-6 flex-1 text-sm">
@@ -138,9 +137,7 @@ export default function Page() {
         </div>
 
         <div className="px-10 -mt-16 space-y-8">
-
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
             {/* ---------- Upload Panel ---------- */}
             <section className="bg-white rounded-xl shadow-sm p-6">
               <h2 className="text-lg font-semibold mb-4">
@@ -228,7 +225,7 @@ export default function Page() {
             {/* ---------- Results Panel ---------- */}
             <section className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
               <h2 className="text-lg font-semibold mb-4">
-                Uploaded Resumes
+                Recently Uploaded Resumes
               </h2>
 
               {loading ? (
@@ -255,7 +252,6 @@ export default function Page() {
                 </div>
               )}
             </section>
-
           </div>
         </div>
 
