@@ -14,6 +14,8 @@ export default function Page() {
   const [progress, setProgress] = useState(0);
   const [toast, setToast] = useState(null);
   const [applications, setApplications] = useState([]);
+  const [appsLoading, setAppsLoading] = useState(true);
+
 
   // ✅ FETCH FROM MONGODB WHEN PAGE LOADS
   useEffect(() => {
@@ -22,6 +24,7 @@ export default function Page() {
 
   async function fetchApplications() {
     try {
+      setAppsLoading(true);
       const res = await fetch("/api/applications");
       const data = await res.json();
 
@@ -30,8 +33,22 @@ export default function Page() {
       }
     } catch (err) {
       console.error("Fetch error:", err);
+    } finally {
+      setAppsLoading(false);
     }
   }
+
+  function ResumeSkeleton() {
+    return (
+      <div className="border rounded-lg px-4 py-3 space-y-2 animate-pulse">
+        <div className="h-4 bg-slate-200 rounded w-1/3" />
+        <div className="h-3 bg-slate-200 rounded w-1/2" />
+        <div className="h-3 bg-slate-200 rounded w-1/4" />
+      </div>
+    );
+  }
+
+
 
   function showToast(message) {
     setToast(message);
@@ -263,7 +280,13 @@ export default function Page() {
                 Recently Uploaded Resumes
               </h2>
 
-              {applications.length ? (
+              {appsLoading ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (
+                    <ResumeSkeleton key={i} />
+                  ))}
+                </div>
+              ) : applications.length ? (
                 <ul className="space-y-3 text-sm">
                   {applications.map((app) => (
                     <li
@@ -287,6 +310,8 @@ export default function Page() {
                   Upload resumes
                 </div>
               )}
+
+
             </section>
 
           </div>
