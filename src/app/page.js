@@ -7,11 +7,35 @@ const ALLOWED_TYPES = [
   "application/pdf",
 ];
 
+<<<<<<< HEAD
+/* ---------- Skeleton ---------- */
+function Skeleton({ className = "" }) {
+  return (
+    <div className={`rounded-lg bg-slate-200 animate-pulse ${className}`} />
+  );
+}
+
+=======
+>>>>>>> 64959201ab3f908e4228cec64095afff4dcaa645
 export default function Page() {
   const [files, setFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+<<<<<<< HEAD
+
+  const [toast, setToast] = useState({
+    type: "",
+    message: "",
+  });
+
+  /* ---------- Toast ---------- */
+  function showToast(message, type = "error") {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast({ message: "", type: "" });
+    }, 3000);
+=======
   const [toast, setToast] = useState(null);
   const [applications, setApplications] = useState([]);
   const [appsLoading, setAppsLoading] = useState(true);
@@ -53,8 +77,10 @@ export default function Page() {
   function showToast(message) {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
+>>>>>>> 64959201ab3f908e4228cec64095afff4dcaa645
   }
 
+  /* ---------- Validation ---------- */
   function validateFile(file) {
     if (!ALLOWED_TYPES.includes(file.type)) {
       return `${file.name}: invalid file type`;
@@ -76,13 +102,13 @@ export default function Page() {
       for (const file of fileList) {
         const error = validateFile(file);
         if (error) {
-          showToast(error);
+          showToast(error, "error");
           continue;
         }
 
         const key = `${file.name}-${file.size}-${file.lastModified}`;
         if (existing.has(key)) {
-          showToast(`${file.name} already added`);
+          showToast(`${file.name} already added`, "error");
           continue;
         }
 
@@ -135,6 +161,15 @@ export default function Page() {
     }, 200);
 
     try {
+<<<<<<< HEAD
+      await new Promise((r) => setTimeout(r, 2000));
+      showToast("Resumes uploaded successfully", "success");
+      setFiles([]);
+    } catch {
+      showToast("Upload failed", "error");
+    } finally {
+      clearInterval(timer);
+=======
       for (let i = 0; i < files.length; i++) {
         const fd = new FormData();
         fd.append("resume", files[i]);
@@ -152,6 +187,7 @@ export default function Page() {
       }
 
       clearInterval(interval);
+>>>>>>> 64959201ab3f908e4228cec64095afff4dcaa645
       setProgress(100);
 
       // ✅ REFRESH FROM DATABASE AFTER UPLOAD
@@ -182,7 +218,12 @@ export default function Page() {
         </nav>
       </aside>
 
+<<<<<<< HEAD
+      {/* ---------- Main ---------- */}
+      <main className="flex-1 relative">
+=======
       <main className="flex-1">
+>>>>>>> 64959201ab3f908e4228cec64095afff4dcaa645
         <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white">
           <h2 className="text-2xl font-semibold">Career Agent</h2>
         </div>
@@ -280,15 +321,10 @@ export default function Page() {
                 Recently Uploaded Resumes
               </h2>
 
-              {appsLoading ? (
-                <div className="space-y-3">
-                  {[...Array(5)].map((_, i) => (
-                    <ResumeSkeleton key={i} />
-                  ))}
-                </div>
-              ) : applications.length ? (
+              {applications.length ? (
                 <ul className="space-y-3 text-sm">
                   {applications.map((app) => (
+>>>>>>> 64959201ab3f908e4228cec64095afff4dcaa645
                     <li
                       key={app._id}
                       className="border rounded-lg px-4 py-3"
@@ -317,9 +353,28 @@ export default function Page() {
           </div>
         </div>
 
-        {toast && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-2 rounded-lg text-sm">
-            {toast}
+        {/* ---------- Toast (TOP RIGHT) ---------- */}
+        {toast.message && (
+          <div
+            className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg text-sm font-medium animate-slide-in
+              ${
+                toast.type === "error"
+                  ? "bg-red-50 text-red-700 border border-red-200"
+                  : "bg-green-50 text-green-700 border border-green-200"
+              }`}
+          >
+            <span className="text-lg">
+              {toast.type === "error" ? "⚠️" : "✅"}
+            </span>
+
+            <span>{toast.message}</span>
+
+            <button
+              onClick={() => setToast({ message: "", type: "" })}
+              className="ml-2 text-xs opacity-60 hover:opacity-100"
+            >
+              ✕
+            </button>
           </div>
         )}
       </main>
