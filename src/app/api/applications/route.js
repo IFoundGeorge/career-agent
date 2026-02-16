@@ -137,7 +137,7 @@ export async function POST(req) {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                            "Authorization": `Bearer ${process.env.WORKATO_API}`
+                            "api-token": process.env.WORKATO_API
                         },
                         body: JSON.stringify(workatoPayload),
                     });
