@@ -34,11 +34,25 @@ export default function Page() {
 
   async function fetchApplications() {
     setAppsLoading(true);
+    setShowSkeleton(false);
+
+    const skeletonTimer = setTimeout(() => setShowSkeleton(true), 400);
+
     try {
       const res = await fetch("/api/applications");
       const data = await res.json();
-      if (data.success) {
+
+      if (!res.ok) {
+        console.error("Backend error:", data);
+        showToast(data?.error || "Failed to load applications");
+        return;
+      }
+
+      if (data?.success) {
         setApplications(data.applications || []);
+      } else {
+        showToast("Failed to load applications");
+        console.error("Backend response:", data);
       }
     } catch {
       showToast("Failed to load applications");
@@ -137,8 +151,9 @@ export default function Page() {
         });
 
         const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Upload failed");
+
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || "Upload failed");
         }
       }
 
@@ -185,22 +200,20 @@ export default function Page() {
         </div>
 
         <div className="px-10 -mt-16 space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Upload */}
-            <section className="bg-white rounded-xl shadow-sm p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Upload Resumes */}
+            <section className="bg-white rounded-xl shadow-sm p-6 flex flex-col">
               <h2 className="text-lg font-semibold mb-4">Upload Resumes</h2>
-
               <div
                 onDragEnter={handleDrag}
                 onDragOver={handleDrag}
                 onDragLeave={handleDrag}
                 onDrop={handleDrop}
-                className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition
-                  ${
-                    dragActive
-                      ? "border-[#0049af] bg-blue-50"
-                      : "border-slate-300 hover:border-[#0049af]"
-                  }`}
+                className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ${
+                  dragActive
+                    ? "border-[#0049af] bg-blue-50"
+                    : "border-slate-300 hover:border-[#0049af]"
+                }`}
               >
                 <input
                   type="file"
@@ -213,18 +226,22 @@ export default function Page() {
                 <p className="text-xs text-slate-400 mt-1">or click to browse</p>
               </div>
 
-              {files.map((file, i) => (
-                <div
-                  key={i}
-                  className="mt-2 flex justify-between border rounded px-3 py-2 text-sm"
-                >
-                  <span className="truncate">{file.name}</span>
-                  <button
-                    onClick={() => removeFile(i)}
-                    className="text-red-500 text-xs"
-                  >
-                    Remove
-                  </button>
+              {files.length > 0 && (
+                <div className="mt-4 space-y-2 max-h-64 overflow-y-auto flex-1">
+                  {files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-center border rounded px-4 py-2 text-sm bg-slate-50"
+                    >
+                      <span className="truncate">{file.name}</span>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-red-500 text-xs"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
                 </div>
               ))}
 
@@ -236,9 +253,7 @@ export default function Page() {
                       style={{ width: `${progress}%` }}
                     />
                   </div>
-                  <p className="text-xs mt-1 text-slate-500">
-                    Processing… {progress}%
-                  </p>
+                  <p className="text-xs mt-1 text-slate-500">Processing… {progress}%</p>
                 </div>
               )}
 
@@ -251,11 +266,9 @@ export default function Page() {
               </button>
             </section>
 
-            {/* Results */}
-            <section className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold mb-4">
-                Recently Uploaded Resumes
-              </h2>
+            {/* Recently Uploaded Resumes */}
+            <section className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 flex flex-col">
+              <h2 className="text-lg font-semibold mb-4">Recently Uploaded Resumes</h2>
 
               {appsLoading ? (
                 <div className="space-y-3">
