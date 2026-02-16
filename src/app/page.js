@@ -67,7 +67,7 @@ export default function Page() {
       return `${file.name}: invalid file type`;
     }
     if (file.size > MAX_FILE_SIZE) {
-      return `${file.name}: exceeds 10MB`;
+      return `${file.name}: exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB`;
     }
     return null;
   }
@@ -171,7 +171,21 @@ export default function Page() {
       setLoading(false);
       setTimeout(() => setProgress(0), 500);
     }
+
+    // ✅ set states from backend
+    setParsedText(data.resumeText);
+    setEmail(data.email || "");
+    setFullName(data.fullName || "");
+
+    showToast("Resume parsed successfully!");
+  } catch (err) {
+    console.error("FRONTEND ERROR:", err);
+    showToast(err.message || "Failed to parse resume", "error");
+  } finally {
+    setLoading(false);
   }
+}
+
 
   function viewResume(app) {
     window.open(`/api/applications/${app._id}/resume`, "_blank");
