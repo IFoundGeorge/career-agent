@@ -1,37 +1,67 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
-import { Upload } from "lucide-react";
+import { useState, useEffect } from "react";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_TYPES = [
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = ["application/pdf"];
+
+/* ---------- Skeleton ---------- */
+function Skeleton({ className = "" }) {
+  return <div className={`rounded-lg bg-slate-200 animate-pulse ${className}`} />;
+}
 
 export default function Page() {
   const [files, setFiles] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [applications, setApplications] = useState([]);
+
   const [dragActive, setDragActive] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [toast, setToast] = useState(null);
-  const [parsed, setParsed] = useState(null);
-  const [parsedText, setParsedText] = useState("");
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [appsLoading, setAppsLoading] = useState(true);
 
-  /* ---------------- Toast ---------------- */
+  const [progress, setProgress] = useState(0);
+  const [toast, setToast] = useState({ type: "", message: "" });
 
-  function showToast(message, type = "info") {
+  /* ---------- Toast ---------- */
+  function showToast(message, type = "error") {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast({ message: "", type: "" }), 3000);
   }
 
-  /* ---------------- Validation ---------------- */
+  /* ---------- Fetch Applications ---------- */
+  useEffect(() => {
+    fetchApplications();
+  }, []);
 
+  async function fetchApplications() {
+    setAppsLoading(true);
+    setShowSkeleton(false);
+
+    const skeletonTimer = setTimeout(() => setShowSkeleton(true), 400);
+
+    try {
+      const res = await fetch("/api/applications");
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Backend error:", data);
+        showToast(data?.error || "Failed to load applications");
+        return;
+      }
+
+      if (data?.success) {
+        setApplications(data.applications || []);
+      } else {
+        showToast("Failed to load applications");
+        console.error("Backend response:", data);
+      }
+    } catch {
+      showToast("Failed to load applications");
+    } finally {
+      setAppsLoading(false);
+    }
+  }
+
+  /* ---------- File Handling ---------- */
   function validateFile(file) {
     if (!ALLOWED_TYPES.includes(file.type)) {
       return `${file.name}: invalid file type`;
@@ -42,20 +72,33 @@ export default function Page() {
     return null;
   }
 
-  function addFiles(newFiles) {
-    const valid = [];
-    for (const file of newFiles) {
-      const err = validateFile(file);
-      if (err) {
-        showToast(err, "error");
-        continue;
-      }
-      valid.push(file);
-    }
-    if (valid.length) setFiles((prev) => [...prev, ...valid]);
-  }
+  function addFiles(fileList) {
+    setFiles((prev) => {
+      const existing = new Set(
+        prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`)
+      );
 
-  /* ---------------- Drag & Drop ---------------- */
+      const valid = [];
+
+      for (const file of fileList) {
+        const error = validateFile(file);
+        if (error) {
+          showToast(error);
+          continue;
+        }
+
+        const key = `${file.name}-${file.size}-${file.lastModified}`;
+        if (existing.has(key)) {
+          showToast(`${file.name} already added`);
+          continue;
+        }
+
+        valid.push(file);
+      }
+
+      return [...prev, ...valid];
+    });
+  }
 
   function handleDrag(e) {
     e.preventDefault();
@@ -67,11 +110,12 @@ export default function Page() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    addFiles([...e.dataTransfer.files]);
+    addFiles(Array.from(e.dataTransfer.files));
   }
 
   function handleFileChange(e) {
-    addFiles([...e.target.files]);
+    if (!e.target.files) return;
+    addFiles(Array.from(e.target.files));
     e.target.value = "";
   }
 
@@ -79,36 +123,53 @@ export default function Page() {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
-  /* ---------------- Submit + Parse ---------------- */
-
-async function handleSubmit() {
-
-  if (!files || !files.length) {
-    showToast("No file selected", "error");
-    return;
-  }
-
-  setLoading(true);
-
-  const fd = new FormData();
-  fd.append("resume", files[0]); // MUST match backend key
-
-  try {
-    const res = await fetch("/api/applications", {
-      method: "POST",
-      body: fd,
-    });
-
-    const data = await res.json();
-
-    console.log("API RESPONSE 👉", data);
-
-    if (!res.ok) {
-      throw new Error(data.error || "Upload failed");
+  /* ---------- Submit ---------- */
+  async function submitResumes() {
+    if (!files.length) {
+      showToast("No file selected");
+      return;
     }
 
-    if (!data.success) {
-      throw new Error("Failed to process resume");
+    setLoading(true);
+    setProgress(0);
+
+    let fakeProgress = 0;
+    const interval = setInterval(() => {
+      fakeProgress += Math.random() * 6;
+      if (fakeProgress >= 90) fakeProgress = 90;
+      setProgress(Math.floor(fakeProgress));
+    }, 200);
+
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("resume", file);
+
+        const res = await fetch("/api/applications", {
+          method: "POST",
+          body: fd,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || "Upload failed");
+        }
+      }
+
+      clearInterval(interval);
+      setProgress(100);
+
+      await fetchApplications();
+      setFiles([]);
+
+      showToast("All resumes processed successfully!", "success");
+    } catch (err) {
+      clearInterval(interval);
+      showToast(err.message || "Upload failed");
+    } finally {
+      setLoading(false);
+      setTimeout(() => setProgress(0), 500);
     }
 
     // ✅ set states from backend
@@ -126,151 +187,169 @@ async function handleSubmit() {
 }
 
 
-  /* ---------------- Success ---------------- */
-
-  if (success) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100">
-        <div className="w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-lg">
-          <h2 className="text-2xl font-semibold animate-pulse">
-            ✅ Resume Processed
-          </h2>
-
-          {parsed && (
-            <div className="mt-6 rounded-xl bg-zinc-100 p-4 text-left text-sm">
-              <p><strong>Email:</strong> {parsed.email || "—"}</p>
-              <p><strong>Phone:</strong> {parsed.phone || "—"}</p>
-              <p><strong>Skills:</strong> {parsed.skills?.join(", ") || "—"}</p>
-            </div>
-          )}
-
-          <button
-            onClick={() => {
-              setFiles([]);
-              setParsed(null);
-              setSuccess(false);
-              setProgress(0);
-            }}
-            className="mt-6 rounded-full bg-zinc-900 px-6 py-2 text-sm text-white hover:bg-zinc-800"
-          >
-            Upload Another
-          </button>
-        </div>
-      </div>
-    );
+  function viewResume(app) {
+    window.open(`/api/applications/${app._id}/resume`, "_blank");
   }
 
-  /* ---------------- Main UI ---------------- */
+  function analyzeResume(app) {
+    showToast(`Analyzing ${app.fullName}`, "success");
+        {/* try to put the api here cyrus  */}
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-zinc-50 via-white to-zinc-100">
-      <div
-        className={`relative flex w-full max-w-5xl gap-10 rounded-2xl border bg-white p-8 shadow-md transition-all duration-300
-          ${dragActive
-            ? "border-blue-500 shadow-blue-200/50"
-            : "border-zinc-300"}`}
-      >
+    <div className="min-h-screen flex bg-slate-100">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white border-r flex flex-col">
+        <nav className="mt-6 flex-1 text-sm">
+          <a className="flex items-center gap-3 px-6 py-3 bg-[#F29035] text-white rounded-r-full">
+            Resume
+          </a>
+        </nav>
+      </aside>
 
-        {/* Toast */}
-        {toast && (
-          <div
-            className={`absolute -top-14 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2 text-sm shadow
-              ${toast.type === "error"
-                ? "bg-red-600 text-white"
-                : "bg-black text-white"}`}
-          >
-            {toast.message}
-          </div>
-        )}
-
-        {/* Upload box */}
-        <div
-          onDragEnter={handleDrag}
-          onDragOver={handleDrag}
-          onDragLeave={handleDrag}
-          onDrop={handleDrop}
-          className={`relative flex w-1/2 flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 text-center transition-all duration-300
-            ${dragActive
-              ? "border-blue-500 bg-blue-50"
-              : "border-zinc-300 bg-zinc-50"}`}
-        >
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx"
-            onChange={handleFileChange}
-            className="absolute inset-0 cursor-pointer opacity-0"
-          />
-
-          <Upload className="mb-4 h-10 w-10 text-blue-500" />
-
-          <button
-            type="button"
-            className="rounded-full bg-blue-500 px-6 py-2 text-sm font-medium text-white"
-          >
-            Browse
-          </button>
-
-          <p className="mt-3 text-sm text-zinc-500">
-            drop a file here
-          </p>
-
-          <p className="mt-1 text-xs text-red-500">
-            *File supported .pdf, .doc & .docx
-          </p>
+      {/* Main */}
+      <main className="flex-1 relative">
+        <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white">
+          <h2 className="text-2xl font-semibold">Career Agent</h2>
         </div>
 
-        {/* Divider */}
-        <div className="w-px bg-gradient-to-b from-transparent via-zinc-300 to-transparent" />
+        <div className="px-10 -mt-16 space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Upload Resumes */}
+            <section className="bg-white rounded-xl shadow-sm p-6 flex flex-col">
+              <h2 className="text-lg font-semibold mb-4">Upload Resumes</h2>
+              <div
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ${
+                  dragActive
+                    ? "border-[#0049af] bg-blue-50"
+                    : "border-slate-300 hover:border-[#0049af]"
+                }`}
+              >
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf"
+                  onChange={handleFileChange}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+                <p className="text-sm font-medium">Drag & drop resumes</p>
+                <p className="text-xs text-slate-400 mt-1">or click to browse</p>
+              </div>
 
-        {/* File list */}
-        <div className="w-1/2 space-y-3">
-          {files.map((file, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-            >
-              <span className="truncate">
-                {file.name}
-                <span className="ml-2 text-xs text-zinc-400">
-                  ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                </span>
-              </span>
+              {files.length > 0 && (
+                <div className="mt-4 space-y-2 max-h-64 overflow-y-auto flex-1">
+                  {files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-center border rounded px-4 py-2 text-sm bg-slate-50"
+                    >
+                      <span className="truncate">{file.name}</span>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-red-500 text-xs"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              {loading && (
+                <div className="mt-4">
+                  <div className="h-2 bg-slate-200 rounded overflow-hidden">
+                    <div
+                      className="h-full bg-[#0049af]"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs mt-1 text-slate-500">Processing… {progress}%</p>
+                </div>
+              )}
 
               <button
-                onClick={() => removeFile(i)}
-                className="text-zinc-400 hover:text-red-500"
+                onClick={submitResumes}
+                disabled={!files.length || loading}
+                className="mt-4 w-full bg-[#0049af] disabled:bg-slate-300 text-white py-2.5 rounded-lg"
               >
-                ✕
+                {loading ? "Processing…" : "Submit Resumes"}
               </button>
-            </div>
-          ))}
+            </section>
 
-          {/* Progress */}
-          {loading && (
-            <div className="pt-2">
-              <div className="h-2 rounded-full bg-zinc-200">
-                <div
-                  className="h-2 rounded-full bg-blue-500 transition-all"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-zinc-500">
-                Uploading… {progress}%
-              </p>
-            </div>
-          )}
+            {/* Recently Uploaded Resumes */}
+            <section className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 flex flex-col">
+              <h2 className="text-lg font-semibold mb-4">Recently Uploaded Resumes</h2>
 
-          {/* Submit */}
-          <button
-            onClick={handleSubmit}
-            disabled={!files.length || loading}
-            className="mt-4 h-12 w-full rounded-full bg-blue-500 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
-          >
-            {loading ? "Processing…" : "Submit"}
-          </button>
+              {appsLoading ? (
+                <div className="space-y-3">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-14" />
+                  ))}
+                </div>
+              ) : applications.length ? (
+                <ul className="space-y-2">
+                  {applications.map((app) => (
+                    <li
+                      key={app._id}
+                      className="border rounded px-4 py-3 flex justify-between items-center"
+                    >
+                      <div>
+                        <div className="font-medium">{app.fullName}</div>
+                        <div className="text-xs text-slate-500">
+                          {app.email}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => viewResume(app)}
+                          className="px-3 py-1 text-xs rounded border"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => analyzeResume(app)}
+                          className="px-3 py-1 text-xs rounded bg-[#0049af] text-white"
+                        >
+                          Analyze AI
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-slate-400">
+                  Upload resumes
+                </div>
+              )}
+            </section>
+          </div>
         </div>
 
-      </div>
+        {/* Toast */}
+        {toast.message && (
+          <div
+            className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg text-sm
+              ${
+                toast.type === "error"
+                  ? "bg-red-50 text-red-700 border border-red-200"
+                  : "bg-green-50 text-green-700 border border-green-200"
+              }`}
+          >
+            <span>{toast.message}</span>
+            <button
+              onClick={() => setToast({ message: "", type: "" })}
+              className="ml-2 text-xs opacity-60"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

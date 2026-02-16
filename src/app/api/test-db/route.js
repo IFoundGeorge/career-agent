@@ -11,7 +11,7 @@ export async function GET() {
       fullName: "Test User",
       email: "test@example.com",
       resumeFilePath: "/uploads/test.pdf",
-      status: "uploaded", // ✅ valid enum
+      status: "uploaded", // 
     });
 
     return NextResponse.json({
