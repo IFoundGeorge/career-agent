@@ -7,31 +7,57 @@ const ApplicationSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-
     email: {
       type: String,
       required: false,
       lowercase: true,
       trim: true,
     },
-
     resumeText: {
       type: String,
     },
-
-    resumeFileLink: {   
+    resumeFileLink: {
       type: String,
       required: true,
     },
-
     status: {
       type: String,
-      enum: ["uploaded", "processing", "analyzed", "completed"],
+      enum: ["uploaded", "processing", "analyzed", "completed", "failed"], // Added "failed"
       default: "uploaded",
+    },
+    // --- NEW ANALYSIS SECTION ---
+    aiAnalysis: {
+      summary: {
+        type: String,
+        default: "",
+      },
+      qualificationStatus: {
+        type: String,
+        enum: ["PASS", "FAIL"],
+        default: "FAIL",
+      },
+      fitScore: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0,
+      },
+      skills: {
+        type: [String],
+        default: [],
+      },
+      interviewQuestions: {
+        type: [String],
+        default: [],
+      },
+      analyzedAt: {
+        type: Date,
+        default: Date.now,
+      },
     },
   },
   {
-    timestamps: { createdAt: true, updatedAt: false }, // ✅ adds createdAt
+    timestamps: true, // This adds both createdAt and updatedAt
   }
 );
 
