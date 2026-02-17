@@ -13,11 +13,11 @@ function Skeleton({ className = "" }) {
 export default function Page() {
   const [files, setFiles] = useState([]);
   const [applications, setApplications] = useState([]);
-
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [toast, setToast] = useState({ type: "", message: "" });
+  const [showSkeleton, setShowSkeleton] = useState(false);
 
   /* ---------- Drawer ---------- */
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -68,25 +68,30 @@ export default function Page() {
       file,
       pdfUrl: URL.createObjectURL(file),
     };
+      if (data?.success) {
+        setApplications(data.applications || []);
+      } else {
+        showToast("Failed to load applications");
+        console.error("Backend response:", data);
+      }
+    } catch {
+      showToast("Failed to load applications");
+    } finally {
+      setAppsLoading(false);
+      clearTimeout(skeletonTimer);
+    }
   }
 
   /* ---------- File Handling ---------- */
   function validateFile(file) {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return `${file.name}: invalid file type`;
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      return `${file.name}: exceeds 10MB`;
-    }
+    if (!ALLOWED_TYPES.includes(file.type)) return `${file.name}: invalid file type`;
+    if (file.size > MAX_FILE_SIZE) return `${file.name}: exceeds 10MB`;
     return null;
   }
 
   function addFiles(fileList) {
     setFiles((prev) => {
-      const existing = new Set(
-        prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`)
-      );
-
+      const existing = new Set(prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`));
       const valid = [];
 
       for (const file of fileList) {
@@ -150,6 +155,19 @@ export default function Page() {
     }, 200);
 
     setTimeout(() => {
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("resume", file);
+
+        const res = await fetch("/api/applications", { method: "POST", body: fd });
+        const data = await res.json();
+
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || "Upload failed");
+        }
+      }
+
       clearInterval(interval);
       setProgress(100);
 
@@ -188,6 +206,7 @@ export default function Page() {
     }
 
     showToast("Resume deleted", "success");
+    // TODO: Call analyze API here
   }
 
   return (
