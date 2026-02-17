@@ -56,18 +56,38 @@ export default function Page() {
     setTimeout(() => setToast({ message: "", type: "" }), 3000);
   }
 
-  /* ---------- Helpers ---------- */
-  function createApplicationFromFile(file) {
-    const name = file.name.replace(".pdf", "");
+  /* ---------- Fetch Applications ---------- */
+  useEffect(() => {
+    fetchApplications();
+  }, []);
 
-    return {
-      _id: crypto.randomUUID(),
-      fullName: name,
-      email: `${name.toLowerCase().replace(/\s+/g, ".")}@gmail.com`,
-      createdAt: new Date().toISOString(),
-      file,
-      pdfUrl: URL.createObjectURL(file),
-    };
+  async function fetchApplications() {
+    setAppsLoading(true);
+    setShowSkeleton(false);
+
+    const skeletonTimer = setTimeout(() => setShowSkeleton(true), 400);
+
+    try {
+      const res = await fetch("/api/applications");
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Backend error:", data);
+        showToast(data?.error || "Failed to load applications");
+        return;
+      }
+
+      if (data?.success) {
+        setApplications(data.applications || []);
+      } else {
+        showToast("Failed to load applications");
+        console.error("Backend response:", data);
+      }
+    } catch {
+      showToast("Failed to load applications");
+    } finally {
+      setAppsLoading(false);
+    }
   }
 
   /* ---------- File Handling ---------- */
@@ -149,7 +169,23 @@ export default function Page() {
       setProgress(Math.floor(fakeProgress));
     }, 200);
 
-    setTimeout(() => {
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("resume", file);
+
+        const res = await fetch("/api/applications", {
+          method: "POST",
+          body: fd,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || "Upload failed");
+        }
+      }
+
       clearInterval(interval);
       setProgress(100);
 
@@ -207,22 +243,20 @@ export default function Page() {
         </div>
 
         <div className="px-10 -mt-16 space-y-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* LEFT */}
-        <div className="space-y-6">
-              {/* Upload Panel */}
-          <section className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4">Upload Resumes</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Upload Resumes */}
+            <section className="bg-white rounded-xl shadow-sm p-6 flex flex-col">
+              <h2 className="text-lg font-semibold mb-4">Upload Resumes</h2>
               <div
                 onDragEnter={handleDrag}
                 onDragOver={handleDrag}
                 onDragLeave={handleDrag}
                 onDrop={handleDrop}
                 className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ${
-                dragActive
-                 ? "border-[#0049af] bg-blue-50"
-                 : "border-slate-300 hover:border-[#0049af]"
-          }`}
+                  dragActive
+                    ? "border-[#0049af] bg-blue-50"
+                    : "border-slate-300 hover:border-[#0049af]"
+                }`}
               >
                 <input
                   type="file"
@@ -237,20 +271,24 @@ export default function Page() {
                 </p>
                 </div>
 
-                {files.map((file, i) => (
-                  <div
-                  key={i}
-                   className="mt-2 flex justify-between border rounded px-3 py-2 text-sm"
-                  >
-                    <span className="truncate">{file.name}</span>
-                    <button
-                      onClick={() => removeFile(i)}
-                      className="text-red-500 text-xs"
+              {files.length > 0 && (
+                <div className="mt-4 space-y-2 max-h-64 overflow-y-auto flex-1">
+                  {files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-center border rounded px-4 py-2 text-sm bg-slate-50"
                     >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                      <span className="truncate">{file.name}</span>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-red-500 text-xs"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
 
                 {loading && (
                   <div className="mt-4">
@@ -259,12 +297,10 @@ export default function Page() {
                       className="h-full bg-[#0049af]"
                      style={{ width: `${progress}%` }}
                     />
-                    </div>
-                    <p className="text-xs mt-1 text-slate-500">
-                    Processing… {progress}%
-                    </p>
                   </div>
-                )}
+                  <p className="text-xs mt-1 text-slate-500">Processing… {progress}%</p>
+                </div>
+              )}
 
                 <button
                   onClick={submitResumes}
@@ -275,45 +311,10 @@ export default function Page() {
                 </button>
               </section>
 
-              {/* Recently Added */}
-              <section className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold mb-4">Recently Added</h2>
-
-                {loading ? (
-                  <div className="space-y-3">
-                    {[...Array(3)].map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                    ))}
-                  </div>
-                ) : recentApplications.length ? (
-                  <ul className="space-y-3">
-                    {recentApplications.map((app) => (
-                      <li
-                        key={app._id}
-                        className="border rounded-lg px-3 py-2"
-                      >
-                        <div className="text-sm font-medium truncate">
-                          {app.fullName}
-                        </div>
-                        <div className="text-xs text-slate-500 truncate">
-                          {app.email}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-sm text-slate-400 text-center py-6">
-                    No resumes yet
-                  </div>
-                )}
-              </section>
-            </div>
-
-            {/* RIGHT */}
+            {/* Results */}
             <section className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
-             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">
-              Recently Uploaded Resumes
+              <h2 className="text-lg font-semibold mb-4">
+                Recently Uploaded Resumes
               </h2>
 
                <input
