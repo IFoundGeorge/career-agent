@@ -295,7 +295,7 @@ export default function Page() {
       if (!res.ok) throw new Error(data.error || "Delete failed");
 
       setCurrentApplications(prev => prev.filter(app => app._id !== id));
-      showToast({ message: "Application deleted", type: "success" });
+      showToast("Application deleted","success" );
 
     } catch (err) {
       console.error(err);
@@ -797,11 +797,11 @@ export default function Page() {
                       // Remove deleted app from state
                       setApplications(prev => prev.filter(app => app._id !== appToDelete._id));
 
-                      showToast({ message: "Application deleted successfully", type: "success" });
+                      showToast("Application deleted successfully", "success" );
                       setDeleteModalOpen(false);
                       setAppToDelete(null);
                     } catch (err) {
-                      showToast({ message: err.message, type: "error" });
+                      showToast(err.message, "error" );
                     }
                   }}
                   className="px-4 py-2 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
