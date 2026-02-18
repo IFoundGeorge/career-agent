@@ -4,9 +4,13 @@ import connectDB from "@/lib/mongodb";
 import Application from "@/models/Application";
 import { UTApi } from "uploadthing/server";
 import AIAnalysis from "@/models/AIAnalysis";
+import crypto from "crypto"; // Required for file hashing
 
 export const runtime = "nodejs";
 
+/**
+ * GET: Fetches all applications with their associated AI Analysis
+ */
 export async function GET() {
   try {
     await connectDB();
@@ -28,6 +32,9 @@ export async function GET() {
   }
 }
 
+/**
+ * POST: Handles both JSON updates and Multi-part Resume Uploads
+ */
 export async function POST(req) {
   await connectDB();
 
@@ -35,6 +42,7 @@ export async function POST(req) {
     const results = [];
     const contentType = req.headers.get("content-type") || "";
 
+    // --- CASE 1: JSON DATA UPDATE ---
     if (contentType.includes("application/json")) {
       const data = await req.json();
       const { applicationId, fullName, email, resumeFileLink, resumeText, status } = data;
@@ -61,6 +69,7 @@ export async function POST(req) {
       return NextResponse.json({ success: true, application });
     }
 
+    // --- CASE 2: FILE UPLOAD (RESUMES) ---
     const formData = await req.formData();
     const files = formData.getAll("resume");
 
@@ -72,12 +81,38 @@ export async function POST(req) {
     const workatoWebhookUrl = process.env.WORKATO_URL;
 
     for (const file of files) {
+      // 1. Validate File Type (Server-side safety)
+      if (file.type !== "application/pdf") {
+        results.push({ 
+          success: false, 
+          fileName: file.name, 
+          error: "Invalid file type. Only PDFs are accepted." 
+        });
+        continue;
+      }
+
       let application = null;
       let workatoResponseText = null;
 
       try {
         const buffer = Buffer.from(await file.arrayBuffer());
 
+        // 2. Generate Hash to prevent duplicates
+        const fileHash = crypto.createHash("sha256").update(buffer).digest("hex");
+
+        // 3. Check if hash already exists in MongoDB
+        const existingApp = await Application.findOne({ fileHash });
+        if (existingApp) {
+          results.push({
+            success: false,
+            fileName: file.name,
+            error: "This resume has already been uploaded.",
+            isDuplicate: true
+          });
+          continue; // Skip to the next file
+        }
+
+        // 4. Upload to UploadThing
         const uploadResponse = await ut.uploadFiles([new File([buffer], file.name, { type: file.type })]);
         const fileUrl = uploadResponse?.[0]?.data?.ufsUrl;
         if (!fileUrl) throw new Error("Upload failed");
@@ -85,14 +120,17 @@ export async function POST(req) {
         const originalName = file.name.replace(/\.[^/.]+$/, "");
         const extractedFullName = originalName.replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim() || "Unknown Applicant";
 
+        // 5. Create Initial Application Record
         application = await Application.create({
           fullName: extractedFullName,
           email: "",
           resumeText: "",
           resumeFileLink: fileUrl,
           status: "processing",
+          fileHash: fileHash, // Save hash to prevent future duplicates
         });
 
+        // 6. Parse PDF Text
         const resumeTextRaw = await new Promise((resolve, reject) => {
           let text = "";
           new PdfReader().parseBuffer(buffer, (err, item) => {
@@ -119,6 +157,7 @@ export async function POST(req) {
         application.resumeText = cleanedText;
         await application.save();
 
+        // 7. Notify Workato/AI for Analysis
         const workatoPayload = {
           applicationId: application._id,
           fullName: application.fullName,
@@ -140,13 +179,12 @@ export async function POST(req) {
 
           workatoResponseText = await workatoResponse.text();
 
-          // EDIT RESPONSE TO SCHEMA
+          // 8. Parse AI Response and Save
           const outerJson = JSON.parse(workatoResponseText);
           const innerRubyString = outerJson.summary;
           const cleanJsonString = innerRubyString.replace(/=>/g, ":");
           const aiData = JSON.parse(cleanJsonString);
 
-          // Save to AIAnalysis collection
           const savedAnalysis = await AIAnalysis.create({
             applicationId: application._id,
             summary: aiData.summary || "",
@@ -156,20 +194,17 @@ export async function POST(req) {
             interviewQuestions: Array.isArray(aiData.interviewQuestions) ? aiData.interviewQuestions : [],
           });
 
-          // SHOW IN CONSOLE.LOG
           console.log("-----------------------------------------");
-          console.log("✅ SCHEMA DATA SAVED TO MONGODB:");
+          console.log("✅ DUPLICATE CHECK PASSED & ANALYSIS SAVED");
           console.log("Application:", application.fullName);
           console.log("Score:", savedAnalysis.fitScore);
-          console.log("Status:", savedAnalysis.qualificationStatus);
-          console.log("Summary:", savedAnalysis.summary.substring(0, 100) + "...");
           console.log("-----------------------------------------");
 
           application.status = "analyzed";
           await application.save();
 
         } catch (err) {
-          console.error("❌ Schema conversion or Workato notification failed:", err);
+          console.error("❌ Analysis stage failed:", err);
         }
 
         results.push({
@@ -179,8 +214,6 @@ export async function POST(req) {
           email: application.email,
           status: application.status,
           resumeFileLink: application.resumeFileLink,
-          resumeText: application.resumeText,
-          workatoResponse: workatoResponseText,
         });
 
       } catch (fileError) {
