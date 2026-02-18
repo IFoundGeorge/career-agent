@@ -31,7 +31,7 @@ const ApplicationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["uploaded", "processing", "analyzed", "completed"],
+      enum: ["uploaded", "processing", "analyzed", "completed", "failed"],
       default: "uploaded",
     },
   },

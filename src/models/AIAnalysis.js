@@ -31,6 +31,11 @@ const AIAnalysisSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    status: {
+      type: String,
+      enum: ["PENDING", "SUCCESS", "FAILED"], // track analysis state
+      default: "FAILED",
+    },
     analyzedAt: {
       type: Date,
       default: Date.now,

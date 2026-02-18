@@ -8,7 +8,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf"];
 
 function Skeleton({ className = "" }) {
-  return <div className={`rounded-lg bg-slate-200 animate-pulse ${className}`} />;
+  return <div className={`rounded-lg bg-slate-200 animate-pulse-slow ${className}`} />;
 }
 
 export default function Page() {
@@ -306,7 +306,7 @@ export default function Page() {
   return (
     <div className="min-h-screen flex bg-slate-100 relative overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r flex flex-col shadow-sm">
+      <aside className="w-64 bg-white border-r flex flex-col shadow-sm animate-slide-in-left animate-delay-100">
         {/* Logo Section */}
         <div className="h-20 flex items-center justify-center border-b">
           <img
@@ -328,7 +328,7 @@ export default function Page() {
       {/* Main content */}
       <main className="flex-1 relative flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white">
+        <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white animate-slide-in-down animate-delay-200">
           <h2 className="text-2xl font-semibold">Career Agent</h2>
         </div>
 
@@ -340,7 +340,7 @@ export default function Page() {
             <div className="w-full lg:w-[35%] flex-shrink-0 space-y-6">
 
               {/* Upload Panel */}
-              <section className="bg-white rounded-xl shadow-sm p-6">
+              <section className="bg-white rounded-xl shadow-sm p-6 animate-slide-in animate-delay-300">
                 <h2 className="text-lg font-semibold mb-4">Upload Resumes</h2>
                 <div
                   onDragEnter={handleDrag}
@@ -402,7 +402,7 @@ export default function Page() {
               </section>
 
               {/* Recently Added */}
-              <section className="bg-white rounded-xl shadow-sm p-6">
+              <section className="bg-white rounded-xl shadow-sm p-6 animate-slide-in animate-delay-400">
                 <h2 className="text-lg font-semibold mb-4">Recently Added</h2>
 
                 {appsLoading ? (
@@ -448,7 +448,7 @@ export default function Page() {
             </div>
 
             {/* RIGHT */}
-            <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
+            <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col animate-slide-in animate-delay-500">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Recently Uploaded Resumes</h2>
                 <input
@@ -479,7 +479,36 @@ export default function Page() {
                       >
                         <div>
                           <div className="font-medium">{app.fullName}</div>
-                          <div className="text-xs text-slate-500">{app.email}</div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <span>{app.email}</span>
+                            {/* STATUS BADGE */}
+                            <span
+                              className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : app.status === "processing"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : app.status === "analyzed"
+                                      ? "bg-green-100 text-green-700"
+                                      : app.status === "completed"
+                                        ? "bg-green-600 text-white"
+                                        : app.status === "failed"
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-gray-100 text-gray-500"
+                                }`}
+                            >
+                              {app.status === "uploaded"
+                                ? "PENDING"
+                                : app.status === "processing"
+                                  ? "PROCESSING"
+                                  : app.status === "analyzed"
+                                    ? "ANALYZED"
+                                    : app.status === "completed"
+                                      ? "COMPLETED"
+                                      : app.status === "failed"
+                                        ? "FAILED"
+                                        : "UNKNOWN"}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex gap-2">
@@ -503,22 +532,21 @@ export default function Page() {
                           <button
                             onClick={() => {
                               if (!app?._id) {
-                                // NEW
                                 showToast("Cannot delete: Missing ID", "error");
                                 return;
                               }
-                              setAppToDelete(app);      // store the app to delete
-                              setDeleteModalOpen(true); // open the confirmation modal
+                              setAppToDelete(app);
+                              setDeleteModalOpen(true);
                             }}
                             className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
                           >
                             Delete
                           </button>
-
                         </div>
                       </li>
                     ))}
                   </ul>
+
                 ) : (
                   <div className="h-32 flex items-center justify-center text-slate-400">
                     No Uploaded Resumes

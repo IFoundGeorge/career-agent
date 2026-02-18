@@ -126,7 +126,7 @@ export async function POST(req) {
           email: "",
           resumeText: "",
           resumeFileLink: fileUrl,
-          status: "processing",
+          status: "failed",
           fileHash: fileHash, // Save hash to prevent future duplicates
         });
 
@@ -219,7 +219,7 @@ export async function POST(req) {
       } catch (fileError) {
         console.error("File error:", fileError);
         if (application) {
-          application.status = "failed";
+          application.status = "Failed";
           await application.save();
         }
         results.push({
