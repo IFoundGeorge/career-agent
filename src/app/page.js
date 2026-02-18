@@ -295,7 +295,7 @@ export default function Page() {
       if (!res.ok) throw new Error(data.error || "Delete failed");
 
       setCurrentApplications(prev => prev.filter(app => app._id !== id));
-      showToast("Application deleted","success" );
+      showToast("Application deleted", "success");
 
     } catch (err) {
       console.error(err);
@@ -334,9 +334,11 @@ export default function Page() {
 
         {/* Content grid */}
         <div className="px-10 -mt-16 flex-1 overflow-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
             {/* LEFT */}
-            <div className="space-y-6">
+            {/* LEFT */}
+            <div className="w-full lg:w-[35%] flex-shrink-0 space-y-6">
+
               {/* Upload Panel */}
               <section className="bg-white rounded-xl shadow-sm p-6">
                 <h2 className="text-lg font-semibold mb-4">Upload Resumes</h2>
@@ -446,7 +448,7 @@ export default function Page() {
             </div>
 
             {/* RIGHT */}
-            <section className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 flex flex-col">
+            <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Recently Uploaded Resumes</h2>
                 <input
@@ -797,11 +799,11 @@ export default function Page() {
                       // Remove deleted app from state
                       setApplications(prev => prev.filter(app => app._id !== appToDelete._id));
 
-                      showToast("Application deleted successfully", "success" );
+                      showToast("Application deleted successfully", "success");
                       setDeleteModalOpen(false);
                       setAppToDelete(null);
                     } catch (err) {
-                      showToast(err.message, "error" );
+                      showToast(err.message, "error");
                     }
                   }}
                   className="px-4 py-2 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
