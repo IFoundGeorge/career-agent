@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf"];
 
@@ -25,7 +24,6 @@ export default function Page() {
   const [toasts, setToasts] = useState([]);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const router = useRouter();
-
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -277,8 +275,6 @@ export default function Page() {
     setSelectedApp(null);
   }
 
-
-
   async function deleteApplication(id) {
     if (!id) {
       console.error("No application ID provided");
@@ -323,7 +319,6 @@ export default function Page() {
           </div>
         </nav>
       </aside>
-
 
       {/* Main content */}
       <main className="flex-1 relative flex flex-col">
@@ -554,7 +549,6 @@ export default function Page() {
                 )}
               </div>
 
-
               {/* Pagination */}
               {currentApplications.length > 0 && (
                 <div className="mt-4 flex items-center justify-between border-t pt-4 text-sm">
@@ -654,8 +648,6 @@ export default function Page() {
         </div>
       </div>
 
-
-
       {/* NEW STACKABLE TOASTS */}
       <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map((t) => (
@@ -673,8 +665,6 @@ export default function Page() {
           </div>
         ))}
       </div>
-
-
 
       {/* AI Analysis Modal */}
       {analysisModalOpen && (
