@@ -39,7 +39,7 @@ export default function Page() {
   const [appToAnalyze, setAppToAnalyze] = useState(null);
 
   // ---------- Derived Variables ----------
-  const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 10;
   const filteredApplications = applications.filter(
     (app) =>
       app.fullName.toLowerCase().includes(search.toLowerCase()) ||
@@ -62,10 +62,9 @@ export default function Page() {
     }, 4000);
   }
 
-  // ---------- Fetch Applications ----------
   useEffect(() => {
     fetchApplications();
-  }, []);
+  }, []); // ok: empty deps array, runs only once
 
   async function fetchApplications() {
     setAppsLoading(true);
@@ -484,16 +483,16 @@ export default function Page() {
                             {/* STATUS BADGE */}
                             <span
                               className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : app.status === "processing"
-                                    ? "bg-blue-100 text-blue-700"
-                                    : app.status === "analyzed"
-                                      ? "bg-green-100 text-green-700"
-                                      : app.status === "completed"
-                                        ? "bg-green-600 text-white"
-                                        : app.status === "failed"
-                                          ? "bg-red-100 text-red-700"
-                                          : "bg-gray-100 text-gray-500"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : app.status === "processing"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : app.status === "analyzed"
+                                    ? "bg-green-100 text-green-700"
+                                    : app.status === "completed"
+                                      ? "bg-green-600 text-white"
+                                      : app.status === "failed"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-gray-100 text-gray-500"
                                 }`}
                             >
                               {app.status === "uploaded"
@@ -825,7 +824,7 @@ export default function Page() {
                       if (!res.ok) throw new Error("Failed to delete application");
 
                       // Remove deleted app from state
-                      setApplications(prev => prev.filter(app => app._id !== appToDelete._id));
+                      setApplications(prev => prev.filter(app => app._id !== id));
 
                       showToast("Application deleted successfully", "success");
                       setDeleteModalOpen(false);
