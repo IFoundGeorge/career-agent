@@ -21,7 +21,7 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [appsLoading, setAppsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
-  // Replace the old toast state with this:
+  // Replace the old toast state with this:s
   const [toasts, setToasts] = useState([]);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const router = useRouter();
@@ -39,7 +39,7 @@ export default function Page() {
   const [appToAnalyze, setAppToAnalyze] = useState(null);
 
   // ---------- Derived Variables ----------
-const ITEMS_PER_PAGE = 10;
+  const ITEMS_PER_PAGE = 10;
   const filteredApplications = applications.filter(
     (app) =>
       app.fullName.toLowerCase().includes(search.toLowerCase()) ||
@@ -49,6 +49,22 @@ const ITEMS_PER_PAGE = 10;
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const currentApplications = filteredApplications.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   const recentApplications = applications.slice(0, 3);
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashExiting, setSplashExiting] = useState(false);
+
+
+  useEffect(() => {
+    // Start exit animation after 3.2s
+    const exitTimer = setTimeout(() => setSplashExiting(true), 3200);
+
+    // Actually remove splash after animation duration (0.8s)
+    const removeTimer = setTimeout(() => setShowSplash(false), 3200 + 800);
+
+    return () => {
+      clearTimeout(exitTimer);
+      clearTimeout(removeTimer);
+    };
+  }, []);
 
   // ---------- Toast ----------
   // Updated showToast to push to the array
@@ -302,6 +318,21 @@ const ITEMS_PER_PAGE = 10;
     }
   }
 
+  if (showSplash) {
+    return (
+      <div className="splash-screen">
+        <div className={`splash-content ${splashExiting ? "splash-exit" : ""}`}>
+          <div className="logo-wrapper">
+            <div className="logo-left" />
+            <div className="logo-right" />
+          </div>
+
+          <h1 className="splash-text">Career Agent</h1>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex bg-slate-100 relative overflow-hidden">
       {/* Sidebar */}
@@ -334,7 +365,7 @@ const ITEMS_PER_PAGE = 10;
         {/* Content grid */}
         <div className="px-10 -mt-16 flex-1 overflow-auto">
           <div className="flex flex-col lg:flex-row gap-6 items-start">
-            {/* LEFT */}
+
             {/* LEFT */}
             <div className="w-full lg:w-[35%] flex-shrink-0 space-y-6">
 
