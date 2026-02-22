@@ -14,132 +14,99 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // user effect intentionally left blank – we no longer redirect automatically
+  // when a user is already authenticated. Navigation to the dashboard is disabled.
   useEffect(() => {
-    if (user) {
-      router.push("/");
-    }
+    // no-op
   }, [user, router]);
 
   function handleSubmit(e) {
     e.preventDefault();
     login({ email, password });
-    router.push("/");
+    // intentionally not navigating to the dashboard after login
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e6efff] via-white to-[#fff4ea] px-6">
-      
-      {/* MAIN CARD */}
-      <div className="w-full max-w-6xl bg-white rounded-[32px] shadow-[0_40px_80px_-20px_rgba(0,73,175,0.25)] overflow-hidden flex">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0049AF] via-[#003d95] to-[#002d6b] relative overflow-hidden px-6 py-8">
+
+      {/* Animated decorative shapes */}
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-float-slow" />
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#F29035]/10 rounded-full blur-3xl animate-pulse-slow" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-[#F29035]/5 rounded-full blur-2xl" />
+
+      {/* login card */}
+      <div className="relative z-10 w-full max-w-md bg-white/10 backdrop-blur-xl p-10 rounded-2xl shadow-2xl border border-white/20">
         
-        {/* LEFT SIDE */}
-        <div className="flex-1 p-14">
+        {/* Logo/Header area */}
+        <div className="mb-8 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#F29035] rounded-xl mb-4 shadow-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.657 0 3-1.343 3-3V5a3 3 0 00-6 0v3c0 1.657 1.343 3 3 3z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 11h14v10H5z" /></svg>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">HR Portal</h1>
+          <p className="text-white/70 text-sm">Welcome back! Please log in to continue.</p>
+        </div>
 
-          {/* HEADER */}
-          <header className="flex items-center justify-between mb-16">
-            <h2 className="text-2xl font-bold text-[#0049AF] tracking-tight">
-             Aretex 
-            </h2>
-
-            <nav className="flex items-center gap-8 text-sm font-medium">
-              <Link href="/" className="text-gray-500 hover:text-[#0049AF] transition">
-                HOME
-              </Link>
-              <Link href="/about" className="text-gray-500 hover:text-[#0049AF] transition">
-                ABOUT US
-              </Link>
-              <Link href="/contact" className="text-gray-500 hover:text-[#0049AF] transition">
-                CONTACT
-              </Link>
-              <Link href="/login" className="text-[#0049AF] border-b-2 border-[#0049AF] pb-1">
-                LOG IN
-              </Link>
-            </nav>
-          </header>
-
-          {/* TITLE */}
-          <h1 className="text-4xl font-bold text-[#0049AF] mb-10 tracking-tight">
-            Log in
-          </h1>
-
-          {/* FORM */}
-          <form onSubmit={handleSubmit} className="space-y-6 max-w-md">
-
-            {/* EMAIL */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Email Input */}
+          <div className="relative group">
+            <label htmlFor="email" className="block text-white/80 text-sm font-medium mb-2">Email Address</label>
+            <span className="absolute left-4 top-[calc(50%+0.5rem)] -translate-y-1/2 text-white/60 group-focus-within:text-[#F29035] transition">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+            </span>
             <input
+              id="email"
               type="email"
               required
-              placeholder="Username or email"
+              autoFocus
+              placeholder="your.email@company.com"
+              aria-label="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-12 px-5 rounded-full bg-gray-100 focus:bg-white border border-transparent focus:border-[#0049AF] focus:ring-4 focus:ring-[#0049AF]/20 outline-none transition-all"
+              className="w-full h-12 pl-12 pr-4 rounded-xl bg-white/10 border-2 border-white/30 placeholder-white/40 text-white transition-all focus:outline-none focus:border-[#F29035] focus:bg-white/15 focus:shadow-lg focus:shadow-[#F29035]/20 hover:border-white/50"
             />
+          </div>
 
-            {/* PASSWORD */}
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-12 px-5 pr-12 rounded-full bg-gray-100 focus:bg-white border border-transparent focus:border-[#0049AF] focus:ring-4 focus:ring-[#0049AF]/20 outline-none transition-all"
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#0049AF] transition"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-
-            {/* REMEMBER + FORGOT */}
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-gray-600">
-                <input
-                  type="checkbox"
-                  className="accent-[#0049AF] w-4 h-4 rounded"
-                />
-                Remember me
-              </label>
-
-              <Link
-                href="/forgot-password"
-                className="text-gray-400 hover:text-[#F29035] transition"
-              >
-                Forgot Password?
-              </Link>
-            </div>
-
-            {/* LOGIN BUTTON (Orange CTA) */}
+          {/* Password Input */}
+          <div className="relative group">
+            <label htmlFor="password" className="block text-white/80 text-sm font-medium mb-2">Password</label>
+            <span className="absolute left-4 top-[calc(50%+0.5rem)] -translate-y-1/2 text-white/60 group-focus-within:text-[#F29035] transition">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.657 0 3-1.343 3-3V5a3 3 0 00-6 0v3c0 1.657 1.343 3 3 3z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 11h14v10H5z" /></svg>
+            </span>
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              required
+              placeholder="Enter your password"
+              aria-label="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full h-12 pl-12 pr-12 rounded-xl bg-white/10 border-2 border-white/30 placeholder-white/40 text-white transition-all focus:outline-none focus:border-[#F29035] focus:bg-white/15 focus:shadow-lg focus:shadow-[#F29035]/20 hover:border-white/50"
+            />
             <button
-              type="submit"
-              className="w-full h-12 rounded-full bg-gradient-to-r from-[#F29035] to-[#e67e22] text-white font-medium tracking-wide shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-[calc(50%+0.5rem)] -translate-y-1/2 text-white/60 hover:text-white transition"
             >
-              Log in
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
+          </div>
 
-          </form>
-        </div>
+          {/* Login Button */}
+          <button
+            type="submit"
+            className="w-full h-12 rounded-xl bg-gradient-to-r from-[#F29035] to-[#e67e22] text-white font-semibold shadow-lg hover:shadow-xl hover:shadow-[#F29035]/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mt-6 tracking-wide"
+          >
+            Sign In
+          </button>
+        </form>
 
-        {/* RIGHT SIDE HERO PANEL WITH ANIMATIONS */}
-        <div className="hidden md:flex flex-1 relative bg-gradient-to-br from-[#0049AF] to-[#002d6b] flex-col justify-center items-center text-white p-16 overflow-hidden">
-
-          {/* Animated Glows */}
-          <div className="absolute top-20 right-20 w-64 h-64 bg-[#F29035]/30 rounded-[60px] rotate-45 blur-3xl animate-pulse-slow" />
-          <div className="absolute bottom-20 left-20 w-72 h-72 bg-white/10 rounded-[60px] rotate-12 blur-2xl animate-float" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.15),transparent_60%)] animate-pulse-slow" />
-
-          {/* Hero Content */}
-          <h2 className="text-3xl font-bold mb-4 z-10 text-center animate-fade-in">
-            Welcome Back!
-          </h2>
-          <p className="text-lg opacity-80 mb-8 text-center z-10 animate-fade-in delay-200">
-          </p>
-
-        </div>
+        {/* Forgot Password Link */}
+        <Link
+          href="/forgot-password"
+          className="block mt-6 text-center text-white/70 text-sm hover:text-[#F29035] transition font-medium"
+        >
+          Forgot your password?
+        </Link>
       </div>
 
       {/* Custom Tailwind Animations */}
@@ -150,22 +117,15 @@ export default function LoginPage() {
         }
         @keyframes float-slow {
           0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
+          50% { transform: translateY(-15px); }
         }
         @keyframes pulse-slow {
-          0%, 100% { opacity: 0.7; }
-          50% { opacity: 1; }
-        }
-        @keyframes fade-in {
-          0% { opacity: 0; transform: translateY(20px); }
-          100% { opacity: 1; transform: translateY(0); }
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 0.9; }
         }
 
-        .animate-float { animation: float 6s ease-in-out infinite; }
         .animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
         .animate-pulse-slow { animation: pulse-slow 5s ease-in-out infinite; }
-        .animate-fade-in { animation: fade-in 1s ease forwards; }
-        .animate-fade-in.delay-200 { animation-delay: 0.2s; }
       `}</style>
     </div>
   );

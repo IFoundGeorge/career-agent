@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-// auth is currently disabled; user/login handled later
-// import { useAuth } from "../lib/auth";
+
 import { OctagonXIcon, CircleCheckIcon, FileTextIcon } from "lucide-react";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -16,11 +15,6 @@ function Skeleton({ className = "" }) {
 
 export default function Page() {
   const router = useRouter();
-  // auth disabled for now; no user or logout available
-
-  // redirect to login if not signed in
-
-
   const [files, setFiles] = useState([]);
   const [applications, setApplications] = useState([]);
 
@@ -174,8 +168,6 @@ export default function Page() {
     setTimeout(() => {
       clearInterval(interval);
       setProgress(100);
-
-      // avoid adding duplicates by fullName (from file name)
       const existingNames = new Set(applications.map((a) => a.fullName));
       const newApps = [];
       files.forEach((f) => {
