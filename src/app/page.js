@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -51,27 +52,39 @@ export default function Page() {
   const recentApplications = applications.slice(0, 3);
   const [showSplash, setShowSplash] = useState(true);
   const [splashExiting, setSplashExiting] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (analysisModalOpen) {
+      setIsVisible(true);
+    } else {
+      const timeout = setTimeout(() => setIsVisible(false), 400);
+      return () => clearTimeout(timeout);
+    }
+  }, [analysisModalOpen]);
 
 
   useEffect(() => {
-    // Start exit animation after 3.2s
-    const exitTimer = setTimeout(() => setSplashExiting(true), 3200);
+    const timer = setTimeout(() => {
+      const splashEl = document.querySelector(".splash-screen");
+      if (splashEl) splashEl.classList.add("splash-exit");
 
-    // Actually remove splash after animation duration (0.8s)
-    const removeTimer = setTimeout(() => setShowSplash(false), 3200 + 800);
+      // Remove splash after animation
+      setTimeout(() => setShowSplash(false), 1000); // match animation duration
+    }, 2500); // time before splash exits
 
-    return () => {
-      clearTimeout(exitTimer);
-      clearTimeout(removeTimer);
-    };
+    return () => clearTimeout(timer);
   }, []);
+
 
   // ---------- Toast ----------
   // Updated showToast to push to the array
   // ---------- Toast ----------
   function showToast(message, type = "error") {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]); // Use setToasts here
+    const toast = { id, message, type, visible: true }; // <-- add visible here
+
+    setToasts((prev) => [...prev, toast]);
 
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -326,7 +339,6 @@ export default function Page() {
             <div className="logo-left" />
             <div className="logo-right" />
           </div>
-
           <h1 className="splash-text">Career Agent</h1>
         </div>
       </div>
@@ -358,12 +370,12 @@ export default function Page() {
       {/* Main content */}
       <main className="flex-1 relative flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white animate-slide-in-down animate-delay-200">
+        <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white animate-slide-in-down animate-delay-200 relative z-10">
           <h2 className="text-2xl font-semibold">Career Agent</h2>
         </div>
 
         {/* Content grid */}
-        <div className="px-10 -mt-16 flex-1 overflow-auto">
+        <div className="px-10 -mt-16 flex-1 overflow-auto relative z-20">
           <div className="flex flex-col lg:flex-row gap-6 items-start">
 
             {/* LEFT */}
@@ -478,7 +490,7 @@ export default function Page() {
             </div>
 
             {/* RIGHT */}
-            <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col animate-slide-in animate-delay-500">
+            <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Recently Uploaded Resumes</h2>
                 <input
@@ -493,7 +505,7 @@ export default function Page() {
                 />
               </div>
 
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-auto bg-white rounded-xl p-1"> {/* solid background */}
                 {appsLoading ? (
                   <div className="space-y-2">
                     {[...Array(6)].map((_, i) => (
@@ -501,89 +513,90 @@ export default function Page() {
                     ))}
                   </div>
                 ) : currentApplications.length ? (
-                  <ul className="space-y-2">
-                    {currentApplications.map((app) => (
-                      <li
-                        key={app._id}
-                        className="border rounded px-4 py-3 flex justify-between items-center transition-shadow duration-300 hover:shadow-md"
-                      >
-                        <div>
-                          <div className="font-medium">{app.fullName}</div>
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <span>{app.email}</span>
-                            {/* STATUS BADGE */}
-                            <span
-                              className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : app.status === "processing"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : app.status === "analyzed"
-                                    ? "bg-green-100 text-green-700"
-                                    : app.status === "completed"
-                                      ? "bg-green-600 text-white"
-                                      : app.status === "failed"
-                                        ? "bg-red-100 text-red-700"
-                                        : "bg-gray-100 text-gray-500"
-                                }`}
-                            >
-                              {app.status === "uploaded"
-                                ? "PENDING"
-                                : app.status === "processing"
-                                  ? "PROCESSING"
-                                  : app.status === "analyzed"
-                                    ? "ANALYZED"
-                                    : app.status === "completed"
-                                      ? "COMPLETED"
-                                      : app.status === "failed"
-                                        ? "FAILED"
-                                        : "UNKNOWN"}
-                            </span>
+                  <ul className="space-y-2 relative bg-white"> {/* keep UL always mounted */}
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {currentApplications.map((app, i) => (
+                        <motion.li
+                          key={app._id}
+                          layout // important for smooth reordering / page switch
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          transition={{ duration: 0.3, delay: i * 0.05 }} // ladder effect
+                          className="border rounded px-4 py-3 flex justify-between items-center shadow-sm bg-white"
+                        >
+                          <div>
+                            <div className="font-medium">{app.fullName}</div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <span>{app.email}</span>
+                              <span
+                                className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : app.status === "processing"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : app.status === "analyzed"
+                                      ? "bg-green-100 text-green-700"
+                                      : app.status === "completed"
+                                        ? "bg-green-600 text-white"
+                                        : app.status === "failed"
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-gray-100 text-gray-500"
+                                  }`}
+                              >
+                                {app.status === "uploaded"
+                                  ? "PENDING"
+                                  : app.status === "processing"
+                                    ? "PROCESSING"
+                                    : app.status === "analyzed"
+                                      ? "ANALYZED"
+                                      : app.status === "completed"
+                                        ? "COMPLETED"
+                                        : app.status === "failed"
+                                          ? "FAILED"
+                                          : "UNKNOWN"}
+                              </span>
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="flex gap-2">
-                          {/* View Button */}
-                          <button
-                            onClick={() => openDrawer(app)}
-                            className="px-3 py-1 text-xs rounded border transition-transform duration-300 hover:scale-105 hover:bg-slate-100"
-                          >
-                            View
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openDrawer(app)}
+                              className="px-3 py-1 text-xs rounded border transition-transform duration-300 hover:scale-105 hover:bg-slate-100"
+                            >
+                              View
+                            </button>
 
-                          {/* Analyze AI Button */}
-                          <button
-                            onClick={() => analyzeResume(app)}
-                            className="px-3 py-1 text-xs rounded bg-[#0049af] text-white transition-transform duration-300 hover:scale-105 hover:bg-[#003580]"
-                          >
-                            Analyze AI
-                          </button>
+                            <button
+                              onClick={() => analyzeResume(app)}
+                              className="px-3 py-1 text-xs rounded bg-[#0049af] text-white transition-transform duration-300 hover:scale-105 hover:bg-[#003580]"
+                            >
+                              Analyze AI
+                            </button>
 
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => {
-                              if (!app?._id) {
-                                showToast("Cannot delete: Missing ID", "error");
-                                return;
-                              }
-                              setAppToDelete(app);
-                              setDeleteModalOpen(true);
-                            }}
-                            className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                            <button
+                              onClick={() => {
+                                if (!app?._id) {
+                                  showToast("Cannot delete: Missing ID", "error");
+                                  return;
+                                }
+                                setAppToDelete(app);
+                                setDeleteModalOpen(true);
+                              }}
+                              className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
                   </ul>
-
                 ) : (
-                  <div className="h-32 flex items-center justify-center text-slate-400">
+                  <div className="h-32 flex items-center justify-center text-slate-400 bg-white">
                     No Uploaded Resumes
                   </div>
                 )}
               </div>
-
 
               {/* Pagination */}
               {currentApplications.length > 0 && (
@@ -599,9 +612,7 @@ export default function Page() {
                     {Array.from({ length: totalPages }).map((_, i) => {
                       const page = i + 1;
                       const show =
-                        page === 1 ||
-                        page === totalPages ||
-                        Math.abs(page - currentPage) <= 1;
+                        page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
 
                       if (!show) {
                         if (page === currentPage - 2 || page === currentPage + 2) {
@@ -618,9 +629,7 @@ export default function Page() {
                         <button
                           key={page}
                           onClick={() => setCurrentPage(page)}
-                          className={`min-w-[36px] h-9 px-3 rounded-lg ${page === currentPage
-                            ? "bg-[#0049af] text-white"
-                            : "hover:bg-slate-100"
+                          className={`min-w-[36px] h-9 px-3 rounded-lg ${page === currentPage ? "bg-[#0049af] text-white" : "hover:bg-slate-100"
                             }`}
                         >
                           {page}
@@ -644,36 +653,37 @@ export default function Page() {
       </main>
 
       {/* Drawer */}
+      {/* Slide-in Drawer */}
       <div
-        className={`fixed top-0 right-0 h-full w-[900px] bg-white z-50 shadow-xl transform transition-transform duration-300 ${drawerOpen ? "translate-x-0" : "translate-x-full"
-          }`}
+        className={`fixed top-0 right-0 h-full w-[900px] bg-white z-50 shadow-2xl
+    transform transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
+    ${drawerOpen ? "translate-x-0" : "translate-x-full pointer-events-none"}
+    flex flex-col
+  `}
       >
         {/* Header */}
-        <div
-          className={`p-5 border-b flex justify-between items-center transition-all duration-300 ${drawerOpen ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
-            }`}
-        >
+        <div className="p-6 border-b flex justify-between items-center flex-shrink-0">
           <div>
             <h3 className="font-semibold text-lg">{selectedApp?.fullName}</h3>
             <p className="text-xs text-slate-500">{selectedApp?.email}</p>
           </div>
+
           <button
             onClick={closeDrawer}
-            className="text-xl font-bold transition-transform duration-300 hover:scale-110 hover:text-red-500"
+            className="text-xl font-bold transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] hover:scale-110 hover:text-red-500 active:scale-95"
           >
             ✕
           </button>
         </div>
 
-        {/* Content */}
+        {/* PDF Viewer: Scrollable only inside drawer */}
         <div
-          className={`h-[calc(100%-72px)] overflow-auto transition-all duration-300 ${drawerOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
-            }`}
+          className="flex-1 p-6 overflow-auto overscroll-contain"
         >
           {selectedApp?.pdfUrl ? (
             <iframe
               src={selectedApp.pdfUrl}
-              className="w-full h-full border rounded-lg hover:shadow-lg transition-shadow duration-300"
+              className="w-full h-full rounded-xl border shadow-sm"
               title={`Resume Preview - ${selectedApp.fullName}`}
             />
           ) : (
@@ -684,195 +694,242 @@ export default function Page() {
         </div>
       </div>
 
-
-
       {/* NEW STACKABLE TOASTS */}
       <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`px-5 py-3 rounded-xl shadow-2xl text-sm pointer-events-auto transition-all transform border-l-4 ${t.type === "error" ? "bg-white border-red-500 text-red-700" :
-              t.type === "success" ? "bg-white border-green-500 text-green-700" :
-                "bg-white border-blue-500 text-blue-700"
-              }`}
-          >
-            <div className="flex items-center gap-2">
-              <span>{t.type === "success" ? "✅" : t.type === "error" ? "⚠️" : "ℹ️"}</span>
+        <AnimatePresence>
+          {toasts.map((t) => (
+            <motion.div
+              key={t.id}
+              initial={{ opacity: 0, x: 50 }}      // Start hidden and shifted right
+              animate={{ opacity: 1, x: 0 }}       // Animate in
+              exit={{ opacity: 0, x: 50 }}         // Animate out
+              transition={{ duration: 0.3 }}       // Smooth timing
+              className={`
+          flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-sm pointer-events-auto
+          border-l-4
+          ${t.type === "success" ? "bg-white border-green-500 text-green-700" :
+                  t.type === "error" ? "bg-white border-red-500 text-red-700" :
+                    "bg-white border-blue-500 text-blue-700"
+                }
+        `}
+            >
+              {/* Tailwind-style icon */}
+              <div className={`
+          w-3 h-3 rounded-full
+          ${t.type === "success" ? "bg-green-500" :
+                  t.type === "error" ? "bg-red-500" : "bg-blue-500"}
+        `} />
+
               <span className="font-bold">{t.message}</span>
-            </div>
-          </div>
-        ))}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
-
-
       {/* AI Analysis Modal */}
-      {analysisModalOpen && (
-        <>
-          <div
-            onClick={() => setAnalysisModalOpen(false)}
-            className="fixed inset-0 bg-slate-900/40 z-40 backdrop-blur-sm"
-          />
-          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-            {/* Main Card: White background with Blue Glow */}
-            <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl shadow-[0_0_50px_-10px_rgba(0,102,224,0.3)] overflow-hidden animate-fade-up max-h-[90vh] flex flex-col">
+      <AnimatePresence>
+        {analysisModalOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              onClick={() => setAnalysisModalOpen(false)}
+              className="fixed inset-0 z-40 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            />
 
-              {/* Header: Clean White */}
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#0066e0]/10 rounded-xl">
-                    <span className="text-[#0066e0] text-xl">✨</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">AI Candidate Report</h3>
-                </div>
-                <button
-                  onClick={() => setAnalysisModalOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all"
-                >
-                  ✕
-                </button>
-              </div>
+            {/* Modal Card */}
+            <motion.div
+              className="fixed inset-0 flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl shadow-[0_0_50px_-10px_rgba(0,102,224,0.3)] overflow-hidden max-h-[90vh] flex flex-col">
 
-              {/* Scrollable Content */}
-              <div className="p-8 overflow-y-auto custom-scrollbar bg-slate-50/30">
-                {analysisLoading ? (
-                  <div className="flex flex-col items-center py-20 text-center">
-                    <div className="w-12 h-12 border-4 border-[#0066e0]/10 border-t-[#0066e0] rounded-full animate-spin mb-4" />
-                    <p className="text-slate-600 font-medium">Generating Report for {appToAnalyze?.fullName}...</p>
-                  </div>
-                ) : aiResult ? (
-                  <div className="space-y-8">
-
-                    {/* Top Row: Score & Status - The "Blue Accent" section */}
-                    <div className="bg-[#0066e0] rounded-2xl p-7 flex justify-between items-center shadow-lg shadow-[#0066e0]/20">
-                      <div>
-                        <p className="text-blue-100 text-xs font-bold uppercase tracking-widest">Match Score</p>
-                        <p className="text-2xl font-bold text-white mt-1">
-                          {aiResult.fitScore > 80 ? "Highly Qualified" : "Candidate Match"}
-                        </p>
-                      </div>
-                      <div className="text-right flex flex-col items-end">
-                        <span className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${aiResult.qualificationStatus === "PASS" ? "bg-white text-green-600" : "bg-white text-red-500"
-                          }`}>
-                          {aiResult.qualificationStatus || "PENDING"}
-                        </span>
-                        <p className="text-5xl font-black text-white">
-                          {aiResult.fitScore || 0}%
-                        </p>
-                      </div>
+                {/* Header */}
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-[#0066e0]/10 rounded-xl">
+                      <span className="text-[#0066e0] text-xl">✨</span>
                     </div>
+                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">AI Candidate Report</h3>
+                  </div>
+                  <button
+                    onClick={() => setAnalysisModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-                    {/* Summary Section */}
-                    <section>
-                      <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
-                        Executive Summary
-                        <div className="h-[1px] flex-1 bg-slate-100"></div>
-                      </h4>
-                      <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-                        <p className="text-slate-700 text-sm leading-relaxed font-medium italic">
-                          "{aiResult.summary}"
-                        </p>
-                      </div>
-                    </section>
-
-                    {/* Skills Section */}
-                    <section>
-                      <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
-                        Core Skills
-                        <div className="h-[1px] flex-1 bg-slate-100"></div>
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {aiResult.skills?.map((skill, i) => (
-                          <span key={i} className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </section>
-
-                    {/* Interview Questions Section */}
-                    <section>
-                      <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
-                        Recommended Questions
-                        <div className="h-[1px] flex-1 bg-slate-100"></div>
-                      </h4>
-                      <ul className="space-y-3">
-                        {aiResult.interviewQuestions?.map((q, i) => (
-                          <li key={i} className="flex gap-4 text-sm p-4 bg-white rounded-xl border border-slate-100 hover:border-[#0066e0]/30 transition-all shadow-sm">
-                            <span className="text-[#0066e0] font-black">0{i + 1}</span>
-                            <span className="text-slate-700 font-medium leading-snug">{q}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-
-                    {/* Close Button: Solid Blue */}
-                    <button
-                      onClick={() => setAnalysisModalOpen(false)}
-                      className="w-full bg-[#0066e0] hover:bg-[#0052b3] text-white font-bold py-4 rounded-2xl transition-all mt-4 shadow-lg shadow-[#0066e0]/25 active:scale-[0.98]"
+                {/* Scrollable Content */}
+                <div className="p-8 overflow-y-auto custom-scrollbar bg-slate-50/30">
+                  {analysisLoading ? (
+                    <div className="flex flex-col items-center py-20 text-center">
+                      <div className="w-12 h-12 border-4 border-[#0066e0]/10 border-t-[#0066e0] rounded-full animate-spin mb-4" />
+                      <p className="text-slate-600 font-medium">
+                        Generating Report for {appToAnalyze?.fullName}...
+                      </p>
+                    </div>
+                  ) : aiResult ? (
+                    <motion.div
+                      className="space-y-8"
+                      initial="hidden"
+                      animate="visible"
+                      exit="hidden"
+                      variants={{
+                        hidden: { opacity: 0, y: 10 },
+                        visible: { opacity: 1, y: 0, transition: { staggerChildren: 0.1 } },
+                      }}
                     >
-                      Done Reading
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-center py-10 text-slate-400">
-                    Analysis data unavailable.
-                  </div>
-                )}
+                      {/* Top Row: Score & Status */}
+                      <motion.div
+                        className="bg-[#0066e0] rounded-2xl p-7 flex justify-between items-center shadow-lg shadow-[#0066e0]/20"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        <div>
+                          <p className="text-blue-100 text-xs font-bold uppercase tracking-widest">Match Score</p>
+                          <p className="text-2xl font-bold text-white mt-1">
+                            {aiResult.fitScore > 80 ? "Highly Qualified" : "Candidate Match"}
+                          </p>
+                        </div>
+                        <div className="text-right flex flex-col items-end">
+                          <span className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${aiResult.qualificationStatus === "PASS" ? "bg-white text-green-600" : "bg-white text-red-500"}`}>
+                            {aiResult.qualificationStatus || "PENDING"}
+                          </span>
+                          <p className="text-5xl font-black text-white">
+                            {aiResult.fitScore || 0}%
+                          </p>
+                        </div>
+                      </motion.div>
+
+                      {/* Summary Section */}
+                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Executive Summary
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
+                        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+                          <p className="text-slate-700 text-sm leading-relaxed font-medium italic">
+                            "{aiResult.summary}"
+                          </p>
+                        </div>
+                      </motion.section>
+
+                      {/* Skills Section */}
+                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Core Skills
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {aiResult.skills?.map((skill, i) => (
+                            <motion.span
+                              key={i}
+                              className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200"
+                              variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                            >
+                              {skill}
+                            </motion.span>
+                          ))}
+                        </div>
+                      </motion.section>
+
+                      {/* Interview Questions Section */}
+                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Recommended Questions
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
+                        <ul className="space-y-3">
+                          {aiResult.interviewQuestions?.map((q, i) => (
+                            <motion.li
+                              key={i}
+                              className="flex gap-4 text-sm p-4 bg-white rounded-xl border border-slate-100 hover:border-[#0066e0]/30 transition-all shadow-sm"
+                              variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                            >
+                              <span className="text-[#0066e0] font-black">0{i + 1}</span>
+                              <span className="text-slate-700 font-medium leading-snug">{q}</span>
+                            </motion.li>
+                          ))}
+                        </ul>
+                      </motion.section>
+
+                      {/* Close Button */}
+                      <motion.button
+                        onClick={() => setAnalysisModalOpen(false)}
+                        className="w-full bg-[#0066e0] hover:bg-[#0052b3] text-white font-bold py-4 rounded-2xl transition-all mt-4 shadow-lg shadow-[#0066e0]/25 active:scale-[0.98]"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        Done Reading
+                      </motion.button>
+                    </motion.div>
+                  ) : (
+                    <div className="text-center py-10 text-slate-400">
+                      Analysis data unavailable.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
-        </>
-      )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Delete Modal */}
-      {deleteModalOpen && (
-        <>
-          <div
-            onClick={() => setDeleteModalOpen(false)}
-            className="fixed inset-0 bg-black/40 z-40"
-          />
-          <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-96 shadow-lg animate-fade-up">
-              <h3 className="text-lg font-semibold mb-4">Delete Application</h3>
-              <p className="text-sm text-slate-500 mb-6">
-                Are you sure you want to delete <strong>{appToDelete?.fullName}</strong>? This action cannot be undone.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setDeleteModalOpen(false)}
-                  className="px-4 py-2 text-sm rounded border hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
+      {
+        deleteModalOpen && (
+          <>
+            <div
+              onClick={() => setDeleteModalOpen(false)}
+              className="fixed inset-0 bg-black/40 z-40"
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 w-96 shadow-lg animate-fade-up">
+                <h3 className="text-lg font-semibold mb-4">Delete Application</h3>
+                <p className="text-sm text-slate-500 mb-6">
+                  Are you sure you want to delete <strong>{appToDelete?.fullName}</strong>? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setDeleteModalOpen(false)}
+                    className="px-4 py-2 text-sm rounded border hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
 
-                <button
-                  onClick={async () => {
-                    if (!appToDelete?._id) return;
+                  <button
+                    onClick={async () => {
+                      if (!appToDelete?._id) return;
 
-                    try {
-                      const res = await fetch(`/api/applications/${appToDelete._id}`, { method: "DELETE" });
-                      if (!res.ok) throw new Error("Failed to delete application");
+                      try {
+                        const res = await fetch(`/api/applications/${appToDelete._id}`, { method: "DELETE" });
+                        if (!res.ok) throw new Error("Failed to delete application");
 
-                      // Remove deleted app from state
-                      setApplications(prev => prev.filter(app => app._id !== id));
+                        // Remove deleted app from state
+                        setApplications(prev => prev.filter(app => app._id !== id));
 
-                      showToast("Application deleted successfully", "success");
-                      setDeleteModalOpen(false);
-                      setAppToDelete(null);
-                    } catch (err) {
-                      showToast(err.message, "error");
-                    }
-                  }}
-                  className="px-4 py-2 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-                >
-                  Delete
-                </button>
+                        showToast("Application deleted successfully", "success");
+                        setDeleteModalOpen(false);
+                        setAppToDelete(null);
+                      } catch (err) {
+                        showToast(err.message, "error");
+                      }
+                    }}
+                    className="px-4 py-2 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
-    </div>
+          </>
+        )
+      }
+    </div >
   );
 }

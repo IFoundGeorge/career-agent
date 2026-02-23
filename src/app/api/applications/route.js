@@ -5,7 +5,6 @@ import Application from "@/models/Application";
 import { UTApi } from "uploadthing/server";
 import AIAnalysis from "@/models/AIAnalysis";
 import crypto from "crypto";
-import { createWorker } from 'tesseract.js'; 
 
 export const runtime = "nodejs";
 
