@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf"];
 
@@ -27,7 +26,6 @@ export default function Page() {
   const [toasts, setToasts] = useState([]);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const router = useRouter();
-
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -313,8 +311,6 @@ export default function Page() {
     setSelectedApp(null);
   }
 
-
-
   async function deleteApplication(id) {
     if (!id) {
       console.error("No application ID provided");
@@ -368,12 +364,14 @@ export default function Page() {
 
         {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          <div className="px-4 py-3 bg-[#F29035] text-white rounded-lg font-medium shadow-sm">
-            Resume
+          <div className="flex items-center gap-3 px-4 py-3 bg-[#F29035] text-white rounded-lg font-medium shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+            </svg>
+            <span>Resume</span>
           </div>
         </nav>
       </aside>
-
 
       {/* Main content */}
       <main className="flex-1 relative flex flex-col">
@@ -457,7 +455,7 @@ export default function Page() {
 
                 {appsLoading ? (
                   <div className="space-y-3">
-                    {[...Array(3)].map((_, i) => (
+                    {[...Array(5)].map((_, i) => (
                       <Skeleton key={i} className="h-12 w-full" />
                     ))}
                   </div>
@@ -611,45 +609,43 @@ export default function Page() {
                     ))}
                   </div>
                 ) : currentApplications.length ? (
-                  <ul className="space-y-2 relative bg-white">
-                    <AnimatePresence initial={false} mode="popLayout">
-                      {currentApplications.map((app, i) => (
-                        <motion.li
-                          key={app._id}
-                          layout
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
-                          transition={{ duration: 0.3, delay: i * 0.05 }}
-                          className={`border rounded px-4 py-3 flex justify-between items-center shadow-sm cursor-pointer
-                ${selectedResume?._id === app._id ? "ring-2 ring-[#0049af] bg-blue-50" : ""}
-                ${hoveredResumeId === app._id && selectedResume?._id !== app._id ? "bg-blue-50" : "bg-white"}
-              `}
-                          onMouseEnter={() => setHoveredResumeId(app._id)}
-                          onMouseLeave={() => setHoveredResumeId(null)}
-                          onClick={() => setSelectedResume(app)}
-                        >
-                          <div>
-                            <div className="font-medium">{app.fullName}</div>
-                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                              <span>{app.email}</span>
-                              <span
-                                className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : app.status === "processing"
-                                    ? "bg-blue-100 text-blue-700"
-                                    : app.status === "analyzed"
-                                      ? "bg-green-100 text-green-700"
-                                      : app.status === "completed"
-                                        ? "bg-green-600 text-white"
-                                        : app.status === "failed"
-                                          ? "bg-red-100 text-red-700"
-                                          : "bg-gray-100 text-gray-500"
-                                  }`}
-                              >
-                                {app.status.toUpperCase()}
-                              </span>
-                            </div>
+                  <ul className="space-y-2">
+                    {currentApplications.map((app) => (
+                      <li
+                        key={app._id}
+                        className="border rounded px-4 py-3 flex justify-between items-center transition-shadow duration-300 hover:shadow-md"
+                      >
+                        <div>
+                          <div className="font-medium">{app.fullName}</div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <span>{app.email}</span>
+                            {/* STATUS BADGE */}
+                            <span
+                              className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : app.status === "processing"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : app.status === "analyzed"
+                                    ? "bg-green-100 text-green-700"
+                                    : app.status === "completed"
+                                      ? "bg-green-600 text-white"
+                                      : app.status === "failed"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-gray-100 text-gray-500"
+                                }`}
+                            >
+                              {app.status === "uploaded"
+                                ? "PENDING"
+                                : app.status === "processing"
+                                  ? "PROCESSING"
+                                  : app.status === "analyzed"
+                                    ? "ANALYZED"
+                                    : app.status === "completed"
+                                      ? "COMPLETED"
+                                      : app.status === "failed"
+                                        ? "FAILED"
+                                        : "UNKNOWN"}
+                            </span>
                           </div>
 
                           <div className="flex gap-2">
@@ -791,30 +787,29 @@ export default function Page() {
 
       {/* NEW STACKABLE TOASTS */}
       <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
-        <AnimatePresence>
-          {toasts.map((t, i) => (
-            <motion.li
-              key={t.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-              className="border rounded px-4 py-3 flex items-center gap-3 shadow-sm bg-white"
-            >
-              <div
-                className={`w-3 h-3 rounded-full ${t.type === "success"
-                    ? "bg-green-500"
-                    : t.type === "error"
-                      ? "bg-red-500"
-                      : "bg-blue-500"
-                  }`}
-              />
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`px-5 py-3 rounded-xl shadow-2xl text-sm pointer-events-auto transition-all transform border-l-4 ${t.type === "error" ? "bg-white border-red-500 text-red-700" :
+              t.type === "success" ? "bg-white border-green-500 text-green-700" :
+                "bg-white border-blue-500 text-blue-700"
+              }`}
+          >
+            <div className="flex items-center gap-3">
+              {/* Icon Replacement */}
+              <div className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black 
+    ${t.type === "success" ? "bg-green-500 text-white" :
+                  t.type === "error" ? "bg-red-500 text-white" :
+                    "bg-blue-500 text-white"}`}>
+                {t.type === "success" && "✓"}
+                {t.type === "error" && "!"}
+                {t.type === "info" && "i"}
+              </div>
 
-              <span className="font-medium text-sm">{t.message}</span>
-            </motion.li>
-          ))}
-        </AnimatePresence>
+              <span className="font-bold">{t.message}</span>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* AI Analysis Modal */}
