@@ -4,38 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-
-const USE_MOCK = true;
-const MOCK_APPLICATIONS = [
-  {
-    _id: "mock-1",
-    fullName: "Test User",
-    email: "test@example.com",
-    resumeFileLink: "/uploads/test.pdf",
-    status: "uploaded",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    _id: "mock-2",
-    fullName: "Jane Doe",
-    email: "jane@example.com",
-    resumeFileLink: "/uploads/test2.pdf",
-    status: "analyzed",
-    createdAt: new Date().toISOString(),
-  },
-];
-
-function generateId() {
-  return Math.random().toString(36).substring(2, 11);
-}
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf"];
@@ -55,6 +23,7 @@ export default function Page() {
   const [appsLoading, setAppsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   // Replace the old toast state with this:s
+  const [hoveredResumeId, setHoveredResumeId] = useState(null); // ✅ add this
   const [toasts, setToasts] = useState([]);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const router = useRouter();
@@ -71,12 +40,6 @@ export default function Page() {
   const [aiResult, setAiResult] = useState(null);
   const [appToAnalyze, setAppToAnalyze] = useState(null);
 
-  // Edit resume state
-  const [editAppId, setEditAppId] = useState("");
-  const [editFullName, setEditFullName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editModalOpen, setEditModalOpen] = useState(false);
-
   // ---------- Derived Variables ----------
   const ITEMS_PER_PAGE = 10;
   const filteredApplications = applications.filter(
@@ -91,6 +54,13 @@ export default function Page() {
   const [showSplash, setShowSplash] = useState(true);
   const [splashExiting, setSplashExiting] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+
+  const [selectedResume, setSelectedResume] = useState(null);
+
+  function handleSelectResume(app) {
+    setSelectedResume(app); // store the clicked resume
+    handleEditSelect(app._id); // existing logic if needed
+  }
 
   useEffect(() => {
     if (analysisModalOpen) {
@@ -116,95 +86,26 @@ export default function Page() {
 
 
   // ---------- Toast ----------
+  // Updated showToast to push to the array
+  // ---------- Toast ----------
   function showToast(message, type = "error") {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]); // Use setToasts here
+    const toast = { id, message, type, visible: true }; // <-- add visible here
+
+    setToasts((prev) => [...prev, toast]);
 
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   }
 
-  // ---------- Edit helpers ----------
-  function handleEditSelect(id) {
-    const app = applications.find((a) => a._id === id);
-    if (!app) {
-      setEditAppId("");
-      setEditFullName("");
-      setEditEmail("");
-      setEditModalOpen(false);
-      return;
-    }
-    setEditAppId(app._id);
-    setEditFullName(app.fullName || "");
-    setEditEmail(app.email || "");
-    setEditModalOpen(true);
-  }
-
-  async function submitEdit() {
-    if (!editAppId) {
-      showToast("Please select a resume to edit", "error");
-      return;
-    }
-
-    try {
-      if (USE_MOCK) {
-        setApplications((prev) =>
-          prev.map((a) =>
-            a._id === editAppId
-              ? { ...a, fullName: editFullName, email: editEmail }
-              : a
-          )
-        );
-        showToast("Resume information updated", "success");
-        setEditModalOpen(false);
-        return;
-      }
-
-      const res = await fetch("/api/applications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          applicationId: editAppId,
-          fullName: editFullName,
-          email: editEmail,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Update failed");
-      }
-
-      showToast("Resume information updated", "success");
-      await fetchApplications();
-      setEditModalOpen(false);
-    } catch (err) {
-      console.error(err);
-      showToast(err.message || "Failed to update", "error");
-    }
-  }
-
   useEffect(() => {
     fetchApplications();
-  }, []); 
-
-  useEffect(() => {
-    if (!editModalOpen) {
-      setEditAppId("");
-      setEditFullName("");
-      setEditEmail("");
-    }
-  }, [editModalOpen]);
+  }, []); // ok: empty deps array, runs only once
 
   async function fetchApplications() {
     setAppsLoading(true);
     try {
-      if (USE_MOCK) {
-        await new Promise((r) => setTimeout(r, 300));
-        setApplications([...MOCK_APPLICATIONS]);
-        return;
-      }
-
       const res = await fetch("/api/applications");
       if (!res.ok) throw new Error("Failed to fetch applications");
       const data = await res.json();
@@ -224,24 +125,14 @@ export default function Page() {
 
   // ---------- File Handling ----------
   function validateFile(file) {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return `${file.name}: invalid file type`;
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      return `${file.name}: exceeds 10MB`;
-    }
+    if (!ALLOWED_TYPES.includes(file.type)) return `${file.name}: invalid file type`;
+    if (file.size > MAX_FILE_SIZE) return `${file.name}: exceeds 10MB`;
     return null;
   }
 
   function addFiles(fileList) {
     setFiles((prev) => {
-      const existing = new Set(
-        prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`)
-      );
-      const uploadedNames = new Set(
-        applications.map((a) => a.fullName.toLowerCase())
-      );
-
+      const existing = new Set(prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`));
       const valid = [];
 
       for (const file of fileList) {
@@ -254,11 +145,6 @@ export default function Page() {
         const key = `${file.name}-${file.size}-${file.lastModified}`;
         if (existing.has(key)) {
           showToast(`${file.name} already added`);
-          continue;
-        }
-        const nameOnly = file.name.replace(/\.pdf$/i, "").toLowerCase();
-        if (uploadedNames.has(nameOnly)) {
-          showToast(`${file.name} was already uploaded`);
           continue;
         }
 
@@ -279,12 +165,14 @@ export default function Page() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
+
+    // Filter for PDFs only from the dropped files
     const droppedFiles = Array.from(e.dataTransfer.files).filter(
       (file) => file.type === "application/pdf"
     );
 
     if (droppedFiles.length === 0 && e.dataTransfer.files.length > 0) {
-      alert("Please drop PDF files only.");
+      alert("Please drop PDF files only."); // Optional: user feedback
       return;
     }
 
@@ -294,6 +182,7 @@ export default function Page() {
   function handleFileChange(e) {
     if (!e.target.files) return;
 
+    // Filter for PDFs only from the selected files
     const selectedFiles = Array.from(e.target.files).filter(
       (file) => file.type === "application/pdf"
     );
@@ -318,10 +207,12 @@ export default function Page() {
       showToast("No file selected");
       return;
     }
+
     setLoading(true);
     setProgress(0);
-    let successCount = 0; 
-    let duplicateCount = 0; 
+
+    let successCount = 0; // Track how many actually uploaded
+    let duplicateCount = 0; // Track how many were skipped
 
     let fakeProgress = 0;
     const interval = setInterval(() => {
@@ -332,29 +223,6 @@ export default function Page() {
 
     try {
       for (const file of files) {
-        if (USE_MOCK) {
-          const nameOnly = file.name.replace(/\.pdf$/i, "").toLowerCase();
-          const exists = applications.some(
-            (a) => a.fullName.toLowerCase() === nameOnly
-          );
-          if (exists) {
-            showToast(`${file.name} already exists.`, "info");
-            duplicateCount++;
-            continue;
-          }
-          const newApp = {
-            _id: generateId(),
-            fullName: nameOnly,
-            email: "",
-            resumeFileLink: URL.createObjectURL(file),
-            status: "uploaded",
-            createdAt: new Date().toISOString(),
-          };
-          setApplications((prev) => [newApp, ...prev]);
-          successCount++;
-          continue;
-        }
-
         const fd = new FormData();
         fd.append("resume", file);
 
@@ -375,6 +243,8 @@ export default function Page() {
             throw new Error(fileResult.error || "File processing failed");
           }
         }
+
+        // If we got here, it was a real success
         successCount++;
       }
 
@@ -382,6 +252,7 @@ export default function Page() {
       setProgress(100);
       await fetchApplications();
       setFiles([]);
+
       // --- Smart Final Message ---
       if (successCount > 0) {
         showToast(`Successfully processed ${successCount} resume(s).`, "success");
@@ -409,21 +280,15 @@ export default function Page() {
     setAnalysisLoading(true);
 
     try {
-      if (USE_MOCK) {
-        // fake an analysis result
-        await new Promise((r) => setTimeout(r, 300));
-        setAiResult(`Analysis for ${app.fullName}: everything looks good.`);
-      } else {
-        const res = await fetch(`/api/applications/${app._id}`, { method: "POST" });
-        const data = await res.json();
+      const res = await fetch(`/api/applications/${app._id}`, { method: "POST" });
+      const data = await res.json();
 
-        if (data.success) {
-          // This maps the MongoDB fields into your state
-          setAiResult(data.analysis);
-        } else {
-          setAiResult(null);
-          console.error("Analysis not found in DB");
-        }
+      if (data.success) {
+        // This maps the MongoDB fields into your state
+        setAiResult(data.analysis);
+      } else {
+        setAiResult(null);
+        console.error("Analysis not found in DB");
       }
     } catch (err) {
       console.error("Fetch error:", err);
@@ -447,6 +312,9 @@ export default function Page() {
     setDrawerOpen(false);
     setSelectedApp(null);
   }
+
+
+
   async function deleteApplication(id) {
     if (!id) {
       console.error("No application ID provided");
@@ -454,12 +322,6 @@ export default function Page() {
     }
 
     try {
-      if (USE_MOCK) {
-        setApplications((prev) => prev.filter((app) => app._id !== id));
-        setCurrentApplications((prev) => prev.filter((app) => app._id !== id));
-        showToast("Application deleted", "success");
-        return;
-      }
       const res = await fetch(`/api/applications/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -476,6 +338,7 @@ export default function Page() {
       showToast({ message: err.message, type: "error" });
     }
   }
+
   if (showSplash) {
     return (
       <div className="splash-screen">
@@ -502,6 +365,7 @@ export default function Page() {
             className="h-10 w-auto object-contain"
           />
         </div>
+
         {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-2">
           <div className="px-4 py-3 bg-[#F29035] text-white rounded-lg font-medium shadow-sm">
@@ -510,12 +374,14 @@ export default function Page() {
         </nav>
       </aside>
 
+
       {/* Main content */}
       <main className="flex-1 relative flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white animate-slide-in-down animate-delay-200 relative z-10">
           <h2 className="text-2xl font-semibold">Career Agent</h2>
         </div>
+
         {/* Content grid */}
         <div className="px-10 -mt-16 flex-1 overflow-auto relative z-20">
           <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -588,6 +454,7 @@ export default function Page() {
               {/* Recently Added */}
               <section className="bg-white rounded-xl shadow-sm p-6 animate-slide-in animate-delay-400">
                 <h2 className="text-lg font-semibold mb-4">Recently Added</h2>
+
                 {appsLoading ? (
                   <div className="space-y-3">
                     {[...Array(3)].map((_, i) => (
@@ -599,10 +466,7 @@ export default function Page() {
                     {recentApplications.map((app) => (
                       <li
                         key={app._id}
-                        className="border rounded-lg px-3 py-2 flex justify-between items-center cursor-pointer hover:bg-slate-50"
-                        onClick={() => {
-                          handleEditSelect(app._id);
-                        }}
+                        className="border rounded-lg px-3 py-2 flex justify-between items-center"
                       >
                         <div>
                           <div className="text-sm font-medium truncate">
@@ -632,7 +496,97 @@ export default function Page() {
                 )}
               </section>
 
+              <section className="bg-white rounded-xl shadow-sm p-6 animate-slide-in animate-delay-500">
+                <h2 className="text-lg font-semibold mb-4">
+                  {selectedResume ? "Resume Details" : "Statistics"}
+                </h2>
+
+                <div className="text-sm text-slate-500 space-y-2">
+                  {selectedResume ? (
+                    <>
+                      {/* Editable Full Name */}
+                      <div>
+                        <label className="text-xs text-slate-500">Full Name</label>
+                        <input
+                          type="text"
+                          value={selectedResume.fullName}
+                          onChange={(e) =>
+                            setSelectedResume({ ...selectedResume, fullName: e.target.value })
+                          }
+                          className="w-full mt-1 px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+
+                      {/* Editable Email */}
+                      <div>
+                        <label className="text-xs text-slate-500">Email</label>
+                        <input
+                          type="email"
+                          value={selectedResume.email}
+                          onChange={(e) =>
+                            setSelectedResume({ ...selectedResume, email: e.target.value })
+                          }
+                          className="w-full mt-1 px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+
+                      {/* Status & Uploaded At */}
+                      <p>
+                        <strong>Status:</strong> {selectedResume.status.toUpperCase()}
+                      </p>
+                      <p>
+                        <strong>Uploaded At:</strong>{" "}
+                        {new Date(selectedResume.createdAt).toLocaleString()}
+                      </p>
+
+                      {/* Save Button */}
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`/api/applications/${selectedResume._id}`, {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify({
+                                fullName: selectedResume.fullName,
+                                email: selectedResume.email,
+                              }),
+                            });
+
+                            if (!res.ok) throw new Error("Failed to update application");
+
+                            const updated = await res.json();
+                            setSelectedResume(updated); // update local state
+
+                            // Optional: update the main applications array to reflect changes
+                            setApplications((prev) =>
+                              prev.map((app) =>
+                                app._id === updated._id ? updated : app
+                              )
+                            );
+
+                            showToast("Application updated successfully!", "success"); // optional toast
+                          } catch (err) {
+                            console.error(err);
+                            showToast("Failed to update application.", "error");
+                          }
+                        }}
+                        className="mt-3 px-4 py-2 bg-[#0049af] text-white rounded hover:bg-[#003580] transition-colors"
+                      >
+                        Save
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p>Total Resumes: {applications.length}</p>
+                      <p>Uploaded Today: {applications.filter(app => new Date(app.createdAt).toDateString() === new Date().toDateString()).length}</p>
+                    </>
+                  )}
+                </div>
+              </section>
             </div>
+
             {/* RIGHT */}
             <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
               <div className="flex items-center justify-between mb-4">
@@ -649,7 +603,7 @@ export default function Page() {
                 />
               </div>
 
-              <div className="flex-1 overflow-auto bg-white rounded-xl p-1"> {/* solid background */}
+              <div className="flex-1 overflow-auto bg-white rounded-xl p-1">
                 {appsLoading ? (
                   <div className="space-y-2">
                     {[...Array(6)].map((_, i) => (
@@ -657,80 +611,80 @@ export default function Page() {
                     ))}
                   </div>
                 ) : currentApplications.length ? (
-                  <ul className="space-y-2">
-                    {currentApplications.map((app) => (
-                      <li
-                        key={app._id}
-                        className="border rounded px-4 py-3 flex justify-between items-center transition-shadow duration-300 hover:shadow-md"
-                      >
-                        <div>
-                          <div className="font-medium">{app.fullName}</div>
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <span>{app.email}</span>
-                            {/* STATUS BADGE */}
-                            <span
-                              className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : app.status === "processing"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : app.status === "analyzed"
-                                    ? "bg-green-100 text-green-700"
-                                    : app.status === "completed"
-                                      ? "bg-green-600 text-white"
-                                      : app.status === "failed"
-                                        ? "bg-red-100 text-red-700"
-                                        : "bg-gray-100 text-gray-500"
-                                }`}
-                            >
-                              {app.status === "uploaded"
-                                ? "PENDING"
-                                : app.status === "processing"
-                                  ? "PROCESSING"
-                                  : app.status === "analyzed"
-                                    ? "ANALYZED"
-                                    : app.status === "completed"
-                                      ? "COMPLETED"
-                                      : app.status === "failed"
-                                        ? "FAILED"
-                                        : "UNKNOWN"}
-                            </span>
+                  <ul className="space-y-2 relative bg-white">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {currentApplications.map((app, i) => (
+                        <motion.li
+                          key={app._id}
+                          layout
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          transition={{ duration: 0.3, delay: i * 0.05 }}
+                          className={`border rounded px-4 py-3 flex justify-between items-center shadow-sm cursor-pointer
+                ${selectedResume?._id === app._id ? "ring-2 ring-[#0049af] bg-blue-50" : ""}
+                ${hoveredResumeId === app._id && selectedResume?._id !== app._id ? "bg-blue-50" : "bg-white"}
+              `}
+                          onMouseEnter={() => setHoveredResumeId(app._id)}
+                          onMouseLeave={() => setHoveredResumeId(null)}
+                          onClick={() => setSelectedResume(app)}
+                        >
+                          <div>
+                            <div className="font-medium">{app.fullName}</div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <span>{app.email}</span>
+                              <span
+                                className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : app.status === "processing"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : app.status === "analyzed"
+                                      ? "bg-green-100 text-green-700"
+                                      : app.status === "completed"
+                                        ? "bg-green-600 text-white"
+                                        : app.status === "failed"
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-gray-100 text-gray-500"
+                                  }`}
+                              >
+                                {app.status.toUpperCase()}
+                              </span>
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="flex gap-2">
-                          {/* View Button */}
-                          <button
-                            onClick={() => openDrawer(app)}
-                            className="px-3 py-1 text-xs rounded border transition-transform duration-300 hover:scale-105 hover:bg-slate-100"
-                          >
-                            View
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openDrawer(app); }}
+                              className="px-3 py-1 text-xs rounded border transition-transform duration-300 hover:scale-105 hover:bg-slate-100"
+                            >
+                              View
+                            </button>
 
-                          {/* Analyze AI Button */}
-                          <button
-                            onClick={() => analyzeResume(app)}
-                            className="px-3 py-1 text-xs rounded bg-[#0049af] text-white transition-transform duration-300 hover:scale-105 hover:bg-[#003580]"
-                          >
-                            Analyze AI
-                          </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); analyzeResume(app); }}
+                              className="px-3 py-1 text-xs rounded bg-[#0049af] text-white transition-transform duration-300 hover:scale-105 hover:bg-[#003580]"
+                            >
+                              Analyze AI
+                            </button>
 
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => {
-                              if (!app?._id) {
-                                showToast("Cannot delete: Missing ID", "error");
-                                return;
-                              }
-                              setAppToDelete(app);
-                              setDeleteModalOpen(true);
-                            }}
-                            className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!app?._id) {
+                                  showToast("Cannot delete: Missing ID", "error");
+                                  return;
+                                }
+                                setAppToDelete(app);
+                                setDeleteModalOpen(true);
+                              }}
+                              className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
                   </ul>
                 ) : (
                   <div className="h-32 flex items-center justify-center text-slate-400 bg-white">
@@ -817,7 +771,7 @@ export default function Page() {
           </button>
         </div>
 
-        {/* Content */}
+        {/* PDF Viewer: Scrollable only inside drawer */}
         <div
           className="flex-1 p-6 overflow-auto overscroll-contain"
         >
@@ -838,36 +792,30 @@ export default function Page() {
       {/* NEW STACKABLE TOASTS */}
       <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         <AnimatePresence>
-          {toasts.map((t) => (
-            <motion.div
+          {toasts.map((t, i) => (
+            <motion.li
               key={t.id}
-              initial={{ opacity: 0, x: 50 }}      // Start hidden and shifted right
-              animate={{ opacity: 1, x: 0 }}       // Animate in
-              exit={{ opacity: 0, x: 50 }}         // Animate out
-              transition={{ duration: 0.3 }}       // Smooth timing
-              className={`
-          flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-sm pointer-events-auto
-          border-l-4
-          ${t.type === "success" ? "bg-white border-green-500 text-green-700" :
-                  t.type === "error" ? "bg-white border-red-500 text-red-700" :
-                    "bg-white border-blue-500 text-blue-700"
-                }
-        `}
+              layout
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, delay: i * 0.05 }}
+              className="border rounded px-4 py-3 flex items-center gap-3 shadow-sm bg-white"
             >
-              {/* Tailwind-style icon */}
-              <div className={`
-          w-3 h-3 rounded-full
-          ${t.type === "success" ? "bg-green-500" :
-                  t.type === "error" ? "bg-red-500" : "bg-blue-500"}
-        `} />
+              <div
+                className={`w-3 h-3 rounded-full ${t.type === "success"
+                    ? "bg-green-500"
+                    : t.type === "error"
+                      ? "bg-red-500"
+                      : "bg-blue-500"
+                  }`}
+              />
 
-              <span className="font-bold">{t.message}</span>
-            </motion.div>
+              <span className="font-medium text-sm">{t.message}</span>
+            </motion.li>
           ))}
         </AnimatePresence>
       </div>
-
-
 
       {/* AI Analysis Modal */}
       <AnimatePresence>
@@ -893,50 +841,62 @@ export default function Page() {
             >
               <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl shadow-[0_0_50px_-10px_rgba(0,102,224,0.3)] overflow-hidden max-h-[90vh] flex flex-col">
 
-              {/* Header: Clean White */}
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#0066e0]/10 rounded-xl">
-                    <span className="text-[#0066e0] text-xl">✨</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">AI Candidate Report</h3>
-                </div>
-                <button
-                  onClick={() => setAnalysisModalOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Scrollable Content */}
-              <div className="p-8 overflow-y-auto custom-scrollbar bg-slate-50/30">
-                {analysisLoading ? (
-                  <div className="flex flex-col items-center py-20 text-center">
-                    <div className="w-12 h-12 border-4 border-[#0066e0]/10 border-t-[#0066e0] rounded-full animate-spin mb-4" />
-                    <p className="text-slate-600 font-medium">Generating Report for {appToAnalyze?.fullName}...</p>
-                  </div>
-                ) : aiResult ? (
-                  <div className="space-y-8">
-
-                    {/* Top Row: Score & Status - The "Blue Accent" section */}
-                    <div className="bg-[#0066e0] rounded-2xl p-7 flex justify-between items-center shadow-lg shadow-[#0066e0]/20">
-                      <div>
-                        <p className="text-blue-100 text-xs font-bold uppercase tracking-widest">Match Score</p>
-                        <p className="text-2xl font-bold text-white mt-1">
-                          {aiResult.fitScore > 80 ? "Highly Qualified" : "Candidate Match"}
-                        </p>
-                      </div>
-                      <div className="text-right flex flex-col items-end">
-                        <span className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${aiResult.qualificationStatus === "PASS" ? "bg-white text-green-600" : "bg-white text-red-500"
-                          }`}>
-                          {aiResult.qualificationStatus || "PENDING"}
-                        </span>
-                        <p className="text-5xl font-black text-white">
-                          {aiResult.fitScore || 0}%
-                        </p>
-                      </div>
+                {/* Header */}
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-[#0066e0]/10 rounded-xl">
+                      <span className="text-[#0066e0] text-xl">✨</span>
                     </div>
+                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">AI Candidate Report</h3>
+                  </div>
+                  <button
+                    onClick={() => setAnalysisModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Scrollable Content */}
+                <div className="p-8 overflow-y-auto custom-scrollbar bg-slate-50/30">
+                  {analysisLoading ? (
+                    <div className="flex flex-col items-center py-20 text-center">
+                      <div className="w-12 h-12 border-4 border-[#0066e0]/10 border-t-[#0066e0] rounded-full animate-spin mb-4" />
+                      <p className="text-slate-600 font-medium">
+                        Generating Report for {appToAnalyze?.fullName}...
+                      </p>
+                    </div>
+                  ) : aiResult ? (
+                    <motion.div
+                      className="space-y-8"
+                      initial="hidden"
+                      animate="visible"
+                      exit="hidden"
+                      variants={{
+                        hidden: { opacity: 0, y: 10 },
+                        visible: { opacity: 1, y: 0, transition: { staggerChildren: 0.1 } },
+                      }}
+                    >
+                      {/* Top Row: Score & Status */}
+                      <motion.div
+                        className="bg-[#0066e0] rounded-2xl p-7 flex justify-between items-center shadow-lg shadow-[#0066e0]/20"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        <div>
+                          <p className="text-blue-100 text-xs font-bold uppercase tracking-widest">Match Score</p>
+                          <p className="text-2xl font-bold text-white mt-1">
+                            {aiResult.fitScore > 80 ? "Highly Qualified" : "Candidate Match"}
+                          </p>
+                        </div>
+                        <div className="text-right flex flex-col items-end">
+                          <span className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${aiResult.qualificationStatus === "PASS" ? "bg-white text-green-600" : "bg-white text-red-500"}`}>
+                            {aiResult.qualificationStatus || "PENDING"}
+                          </span>
+                          <p className="text-5xl font-black text-white">
+                            {aiResult.fitScore || 0}%
+                          </p>
+                        </div>
+                      </motion.div>
 
                       {/* Summary Section */}
                       <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
@@ -951,91 +911,108 @@ export default function Page() {
                         </div>
                       </motion.section>
 
-                    {/* Skills Section */}
-                    <section>
-                      <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
-                        Core Skills
-                        <div className="h-[1px] flex-1 bg-slate-100"></div>
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {aiResult.skills?.map((skill, i) => (
-                          <span key={i} className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </section>
+                      {/* Skills Section */}
+                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Core Skills
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {aiResult.skills?.map((skill, i) => (
+                            <motion.span
+                              key={i}
+                              className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200"
+                              variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                            >
+                              {skill}
+                            </motion.span>
+                          ))}
+                        </div>
+                      </motion.section>
 
-                    {/* Interview Questions Section */}
-                    <section>
-                      <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
-                        Recommended Questions
-                        <div className="h-[1px] flex-1 bg-slate-100"></div>
-                      </h4>
-                      <ul className="space-y-3">
-                        {aiResult.interviewQuestions?.map((q, i) => (
-                          <li key={i} className="flex gap-4 text-sm p-4 bg-white rounded-xl border border-slate-100 hover:border-[#0066e0]/30 transition-all shadow-sm">
-                            <span className="text-[#0066e0] font-black">0{i + 1}</span>
-                            <span className="text-slate-700 font-medium leading-snug">{q}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
+                      {/* Interview Questions Section */}
+                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Recommended Questions
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
+                        <ul className="space-y-3">
+                          {aiResult.interviewQuestions?.map((q, i) => (
+                            <motion.li
+                              key={i}
+                              className="flex gap-4 text-sm p-4 bg-white rounded-xl border border-slate-100 hover:border-[#0066e0]/30 transition-all shadow-sm"
+                              variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                            >
+                              <span className="text-[#0066e0] font-black">0{i + 1}</span>
+                              <span className="text-slate-700 font-medium leading-snug">{q}</span>
+                            </motion.li>
+                          ))}
+                        </ul>
+                      </motion.section>
 
-                    {/* Close Button: Solid Blue */}
-                    <button
-                      onClick={() => setAnalysisModalOpen(false)}
-                      className="w-full bg-[#0066e0] hover:bg-[#0052b3] text-white font-bold py-4 rounded-2xl transition-all mt-4 shadow-lg shadow-[#0066e0]/25 active:scale-[0.98]"
-                    >
-                      Done Reading
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-center py-10 text-slate-400">
-                    Analysis data unavailable.
-                  </div>
-                )}
+                      {/* Close Button */}
+                      <motion.button
+                        onClick={() => setAnalysisModalOpen(false)}
+                        className="w-full bg-[#0066e0] hover:bg-[#0052b3] text-white font-bold py-4 rounded-2xl transition-all mt-4 shadow-lg shadow-[#0066e0]/25 active:scale-[0.98]"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        Done Reading
+                      </motion.button>
+                    </motion.div>
+                  ) : (
+                    <div className="text-center py-10 text-slate-400">
+                      Analysis data unavailable.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
-        </>
-      )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Delete Modal */}
-      {deleteModalOpen && (
-        <>
-          <div
-            onClick={() => setDeleteModalOpen(false)}
-            className="fixed inset-0 bg-black/40 z-40"
-          />
-          <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-96 shadow-lg animate-fade-up">
-              <h3 className="text-lg font-semibold mb-4">Delete Application</h3>
-              <p className="text-sm text-slate-500 mb-6">
-                Are you sure you want to delete <strong>{appToDelete?.fullName}</strong>? This action cannot be undone.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setDeleteModalOpen(false)}
-                  className="px-4 py-2 text-sm rounded border hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
+      {
+        deleteModalOpen && (
+          <>
+            <div
+              onClick={() => setDeleteModalOpen(false)}
+              className="fixed inset-0 bg-black/40 z-40"
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 w-96 shadow-lg animate-fade-up">
+                <h3 className="text-lg font-semibold mb-4">Delete Application</h3>
+                <p className="text-sm text-slate-500 mb-6">
+                  Are you sure you want to delete <strong>{appToDelete?.fullName}</strong>? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setDeleteModalOpen(false)}
+                    className="px-4 py-2 text-sm rounded border hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
 
                   <button
                     onClick={async () => {
-                      if (!appToDelete?._id) return;
+                      const id = appToDelete?._id;
+                      if (!id) return;
 
                       try {
-                        const res = await fetch(`/api/applications/${appToDelete._id}`, { method: "DELETE" });
+                        const res = await fetch(`/api/applications/${id}`, {
+                          method: "DELETE"
+                        });
+
                         if (!res.ok) throw new Error("Failed to delete application");
 
-                        // Remove deleted app from state
-                        setApplications(prev => prev.filter(app => app._id !== id));
+                        setApplications(prev =>
+                          prev.filter(app => app._id !== id)
+                        );
 
                         showToast("Application deleted successfully", "success");
                         setDeleteModalOpen(false);
                         setAppToDelete(null);
+
                       } catch (err) {
                         showToast(err.message, "error");
                       }
