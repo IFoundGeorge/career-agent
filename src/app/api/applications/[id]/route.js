@@ -6,6 +6,25 @@ import { UTApi } from "uploadthing/server";
 
 const utapi = new UTApi(); 
 
+export async function PATCH(req, { params }) {
+  await connectDB();
+  const { id } = await params; // ✅ FIXED
+
+  try {
+    const body = await req.json();
+    const updatedApp = await Application.findByIdAndUpdate(id, body, { new: true });
+
+    if (!updatedApp) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(updatedApp);
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
 export async function POST(req, { params }) {
   await connectDB();
   const { id } = await params;
