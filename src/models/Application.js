@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const ApplicationSchema = new mongoose.Schema(
   {
+    fileHash: {
+    type: String,
+    unique: true, // Prevents MongoDB from accepting duplicates
+    required: true,
+  },
     fullName: {
       type: String,
       required: true,
@@ -26,7 +31,7 @@ const ApplicationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["uploaded", "processing", "analyzed", "completed"],
+      enum: ["uploaded", "processing", "analyzed", "completed", "failed"],
       default: "uploaded",
     },
   },
