@@ -638,14 +638,14 @@ export default function Page() {
 
             {/* RIGHT */}
             <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
-              <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-3">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 w-full">
                 {/* Title */}
                 <h2 className="text-lg font-semibold flex-shrink-0">
                   Recently Uploaded Resumes
                 </h2>
 
                 {/* Search Input with SVG */}
-                <div className="relative flex-1 w-full sm:w-auto">
+                <div className="relative flex-1 w-full sm:w-64">
                   <input
                     type="text"
                     placeholder="Search resume..."
@@ -654,7 +654,7 @@ export default function Page() {
                       setSearch(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="w-full sm:w-64 px-4 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0049af] focus:border-[#0049af] transition-all placeholder:text-slate-400"
+                    className="w-full px-4 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0049af] focus:border-[#0049af] transition-all placeholder:text-slate-400"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                     <svg
@@ -678,7 +678,7 @@ export default function Page() {
                 <select
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value)}
-                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0049af] focus:border-[#0049af] transition-all bg-white cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0049af] focus:border-[#0049af] transition-all bg-white cursor-pointer"
                 >
                   <option value="latest">Latest → Oldest</option>
                   <option value="oldest">Oldest → Latest</option>
@@ -690,15 +690,15 @@ export default function Page() {
                 <button
                   onClick={fetchApplications}
                   disabled={appsLoading}
-                  className={`px-4 py-2 bg-[#0049af] text-white rounded-lg flex items-center gap-2 
-    transition-colors relative overflow-hidden 
-    ${appsLoading ? "cursor-wait bg-[#003580]" : "hover:bg-[#003580]"}`}
+                  className={`w-full sm:w-auto px-4 py-2 bg-[#0049af] text-white rounded-lg flex items-center gap-2 justify-center
+        transition-colors duration-300 relative overflow-hidden
+        ${appsLoading ? "cursor-wait bg-[#003580]" : "hover:bg-[#003580]"}`}
                 >
                   {/* Refresh Icon */}
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className={`h-5 w-5 text-white transition-transform duration-500 ease-in-out
-      ${appsLoading ? "animate-spin" : "group-hover:rotate-180"}`}
+          ${appsLoading ? "animate-spin" : "hover:rotate-180"}`}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -717,9 +717,7 @@ export default function Page() {
                   </span>
 
                   {/* Optional subtle overlay glow */}
-                  <span className="absolute inset-0 rounded-lg bg-white/10 opacity-0 
-    transition-opacity duration-300 pointer-events-none
-    hover:opacity-20"></span>
+                  <span className="absolute inset-0 rounded-lg bg-white/10 opacity-0 transition-opacity duration-300 pointer-events-none hover:opacity-20"></span>
                 </button>
               </div>
 
