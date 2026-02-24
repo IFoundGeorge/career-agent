@@ -193,7 +193,7 @@ export default function Page() {
     );
 
     if (droppedFiles.length === 0 && e.dataTransfer.files.length > 0) {
-      alert("Please drop PDF files only."); // Optional: user feedback
+      showToast("Please drop PDF files only.", "error");
       return;
     }
 
@@ -209,7 +209,7 @@ export default function Page() {
     );
 
     if (selectedFiles.length === 0 && e.target.files.length > 0) {
-      alert("Only PDF files are allowed.");
+      showToast("Only PDF files are allowed.", "error");
       e.target.value = "";
       return;
     }
@@ -340,25 +340,25 @@ export default function Page() {
 
   async function deleteApplication(id) {
     if (!id) {
-      console.error("No application ID provided");
+      showToast("Missing application ID", "error");
       return;
     }
 
     try {
       const res = await fetch(`/api/applications/${id}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Delete failed");
+      if (!res.ok) throw new Error(data?.error || "Delete failed");
 
-      setCurrentApplications(prev => prev.filter(app => app._id !== id));
+      // ✅ Update MAIN state
+      setApplications(prev => prev.filter(app => app._id !== id));
+
       showToast("Application deleted", "success");
-
     } catch (err) {
       console.error(err);
-      showToast({ message: err.message, type: "error" });
+      showToast(err.message || "Delete failed", "error");
     }
   }
 
