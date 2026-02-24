@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf"];
@@ -28,7 +27,6 @@ export default function Page() {
   const [showSkeleton, setShowSkeleton] = useState(false);
   const router = useRouter();
 
-
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
@@ -40,6 +38,16 @@ export default function Page() {
   const [aiResult, setAiResult] = useState(null);
   const [appToAnalyze, setAppToAnalyze] = useState(null);
 
+  const recentApplications = applications.slice(0, 3);
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashExiting, setSplashExiting] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  const [selectedResume, setSelectedResume] = useState(null);
+  const [resumes, setResumes] = useState([]); // your resume data
+  const [sortOption, setSortOption] = useState("latest"); // default: latest to oldest
+
+  // ---------- Sorted & Filtered ----------
   // ---------- Derived Variables ----------
   const ITEMS_PER_PAGE = 10;
   const filteredApplications = applications.filter(
@@ -47,15 +55,28 @@ export default function Page() {
       app.fullName.toLowerCase().includes(search.toLowerCase()) ||
       app.email.toLowerCase().includes(search.toLowerCase())
   );
-  const totalPages = Math.max(1, Math.ceil(filteredApplications.length / ITEMS_PER_PAGE));
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentApplications = filteredApplications.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  const recentApplications = applications.slice(0, 3);
-  const [showSplash, setShowSplash] = useState(true);
-  const [splashExiting, setSplashExiting] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
 
-  const [selectedResume, setSelectedResume] = useState(null);
+  const sortedApplications = useMemo(() => {
+    return [...applications]
+      .filter(app =>
+        app.fullName.toLowerCase().includes(search.toLowerCase()) ||
+        app.email.toLowerCase().includes(search.toLowerCase())
+      )
+      .sort((a, b) => {
+        switch (sortOption) {
+          case "latest": return new Date(b.createdAt) - new Date(a.createdAt);
+          case "oldest": return new Date(a.createdAt) - new Date(b.createdAt);
+          case "name-asc": return a.fullName.localeCompare(b.fullName);
+          case "name-desc": return b.fullName.localeCompare(a.fullName);
+          default: return 0;
+        }
+      });
+  }, [applications, search, sortOption]);
+
+  // ---------- Pagination ----------
+  const totalPages = Math.max(1, Math.ceil(sortedApplications.length / ITEMS_PER_PAGE));
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentApplications = sortedApplications.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   function handleSelectResume(app) {
     setSelectedResume(app); // store the clicked resume
@@ -297,6 +318,8 @@ export default function Page() {
     }
   }
 
+
+
   // Drawer
   function openDrawer(app) {
     if (!app.resumeFileLink) {
@@ -496,111 +519,208 @@ export default function Page() {
                 )}
               </section>
 
-              <section className="bg-white rounded-xl shadow-sm p-6 animate-slide-in animate-delay-500">
-                <h2 className="text-lg font-semibold mb-4">
+              <section className="bg-white rounded-xl shadow-lg p-6 animate-slide-in animate-delay-500">
+                <h2 className="text-xl font-semibold mb-6 text-slate-700">
                   {selectedResume ? "Resume Details" : "Statistics"}
                 </h2>
 
-                <div className="text-sm text-slate-500 space-y-2">
-                  {selectedResume ? (
-                    <>
-                      {/* Editable Full Name */}
-                      <div>
-                        <label className="text-xs text-slate-500">Full Name</label>
-                        <input
-                          type="text"
-                          value={selectedResume.fullName}
-                          onChange={(e) =>
-                            setSelectedResume({ ...selectedResume, fullName: e.target.value })
-                          }
-                          className="w-full mt-1 px-2 py-1 border rounded text-sm"
-                        />
-                      </div>
-
-                      {/* Editable Email */}
-                      <div>
-                        <label className="text-xs text-slate-500">Email</label>
-                        <input
-                          type="email"
-                          value={selectedResume.email}
-                          onChange={(e) =>
-                            setSelectedResume({ ...selectedResume, email: e.target.value })
-                          }
-                          className="w-full mt-1 px-2 py-1 border rounded text-sm"
-                        />
-                      </div>
-
-                      {/* Status & Uploaded At */}
-                      <p>
-                        <strong>Status:</strong> {selectedResume.status.toUpperCase()}
-                      </p>
-                      <p>
-                        <strong>Uploaded At:</strong>{" "}
-                        {new Date(selectedResume.createdAt).toLocaleString()}
-                      </p>
-
-                      {/* Save Button */}
-                      <button
-                        onClick={async () => {
-                          try {
-                            const res = await fetch(`/api/applications/${selectedResume._id}`, {
-                              method: "PATCH",
-                              headers: {
-                                "Content-Type": "application/json",
-                              },
-                              body: JSON.stringify({
-                                fullName: selectedResume.fullName,
-                                email: selectedResume.email,
-                              }),
-                            });
-
-                            if (!res.ok) throw new Error("Failed to update application");
-
-                            const updated = await res.json();
-                            setSelectedResume(updated); // update local state
-
-                            // Optional: update the main applications array to reflect changes
-                            setApplications((prev) =>
-                              prev.map((app) =>
-                                app._id === updated._id ? updated : app
-                              )
-                            );
-
-                            showToast("Application updated successfully!", "success"); // optional toast
-                          } catch (err) {
-                            console.error(err);
-                            showToast("Failed to update application.", "error");
-                          }
-                        }}
-                        className="mt-3 px-4 py-2 bg-[#0049af] text-white rounded hover:bg-[#003580] transition-colors"
+                <div className="space-y-6">
+                  <AnimatePresence mode="wait">
+                    {selectedResume ? (
+                      <motion.div
+                        key="details"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3 }}
                       >
-                        Save
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <p>Total Resumes: {applications.length}</p>
-                      <p>Uploaded Today: {applications.filter(app => new Date(app.createdAt).toDateString() === new Date().toDateString()).length}</p>
-                    </>
-                  )}
+                        {/* Editable Full Name */}
+                        <div className="flex flex-col">
+                          <label className="text-xs text-slate-500 mb-1">Full Name</label>
+                          <input
+                            type="text"
+                            value={selectedResume.fullName}
+                            onChange={(e) =>
+                              setSelectedResume({ ...selectedResume, fullName: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+                          />
+                        </div>
+
+                        {/* Editable Email */}
+                        <div className="flex flex-col">
+                          <label className="text-xs text-slate-500 mb-1">Email</label>
+                          <input
+                            type="email"
+                            value={selectedResume.email}
+                            onChange={(e) =>
+                              setSelectedResume({ ...selectedResume, email: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+                          />
+                        </div>
+
+                        {/* Save Button */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/applications/${selectedResume._id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  fullName: selectedResume.fullName,
+                                  email: selectedResume.email,
+                                }),
+                              });
+
+                              if (!res.ok) throw new Error("Failed to update application");
+
+                              const updated = await res.json();
+                              setSelectedResume(null); // <-- Switch back to Statistics after save
+                              setApplications((prev) =>
+                                prev.map((app) => (app._id === updated._id ? updated : app))
+                              );
+                              showToast("Application updated successfully!", "success");
+                            } catch (err) {
+                              console.error(err);
+                              showToast("Failed to update application.", "error");
+                            }
+                          }}
+                          className="mt-5 w-full sm:w-auto px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
+                        >
+                          Save
+                        </button>
+                      </motion.div>
+                    ) : (
+                      /* Statistics Section */
+                      <motion.div
+                        key="stats"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="flex items-center p-4 bg-purple-50 rounded-lg shadow-sm">
+                            <div className="p-2 bg-purple-200 rounded-full text-purple-800 mr-3">
+                              {/* Resume Icon */}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9M12 4h9M3 8h9M3 16h9" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-sm text-slate-500">Total Resumes</p>
+                              <p className="text-lg font-semibold">{applications.length}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center p-4 bg-yellow-50 rounded-lg shadow-sm">
+                            <div className="p-2 bg-yellow-200 rounded-full text-yellow-800 mr-3">
+                              {/* Calendar Icon */}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3M16 7V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-sm text-slate-500">Uploaded Today</p>
+                              <p className="text-lg font-semibold">
+                                {applications.filter(app => new Date(app.createdAt).toDateString() === new Date().toDateString()).length}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </section>
             </div>
 
             {/* RIGHT */}
             <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Recently Uploaded Resumes</h2>
-                <input
-                  type="text"
-                  placeholder="Search resume..."
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-64 px-3 py-2 text-sm border rounded-lg"
-                />
+              <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-3">
+                {/* Title */}
+                <h2 className="text-lg font-semibold flex-shrink-0">
+                  Recently Uploaded Resumes
+                </h2>
+
+                {/* Search Input with SVG */}
+                <div className="relative flex-1 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    placeholder="Search resume..."
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full sm:w-64 px-4 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0049af] focus:border-[#0049af] transition-all placeholder:text-slate-400"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Sort Dropdown */}
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value)}
+                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0049af] focus:border-[#0049af] transition-all bg-white cursor-pointer"
+                >
+                  <option value="latest">Latest → Oldest</option>
+                  <option value="oldest">Oldest → Latest</option>
+                  <option value="name-asc">Name A → Z</option>
+                  <option value="name-desc">Name Z → A</option>
+                </select>
+
+                {/* Refresh Button */}
+                <button
+                  onClick={fetchApplications}
+                  disabled={appsLoading}
+                  className={`px-4 py-2 bg-[#0049af] text-white rounded-lg flex items-center gap-2 
+    transition-colors relative overflow-hidden 
+    ${appsLoading ? "cursor-wait bg-[#003580]" : "hover:bg-[#003580]"}`}
+                >
+                  {/* Refresh Icon */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`h-5 w-5 text-white transition-transform duration-500 ease-in-out
+      ${appsLoading ? "animate-spin" : "group-hover:rotate-180"}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0112-6.93M20 15a8 8 0 01-12 6.93"
+                    />
+                  </svg>
+
+                  {/* Button text */}
+                  <span className="relative z-10">
+                    {appsLoading ? "Refreshing…" : "Refresh"}
+                  </span>
+
+                  {/* Optional subtle overlay glow */}
+                  <span className="absolute inset-0 rounded-lg bg-white/10 opacity-0 
+    transition-opacity duration-300 pointer-events-none
+    hover:opacity-20"></span>
+                </button>
               </div>
 
               <div className="flex-1 overflow-auto bg-white rounded-xl p-1">
@@ -804,10 +924,10 @@ export default function Page() {
             >
               <div
                 className={`w-3 h-3 rounded-full ${t.type === "success"
-                    ? "bg-green-500"
-                    : t.type === "error"
-                      ? "bg-red-500"
-                      : "bg-blue-500"
+                  ? "bg-green-500"
+                  : t.type === "error"
+                    ? "bg-red-500"
+                    : "bg-blue-500"
                   }`}
               />
 
