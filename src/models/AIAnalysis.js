@@ -6,16 +6,21 @@ const AIAnalysisSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Application",
       required: true,
-      unique: true, // One analysis per application
+      unique: true,
+    },
+    disclaimer: {
+      type: String,
+      default: "ADVISORY ONLY. This is an AI-generated preliminary screen. A qualified recruiter must review this output before any recruitment decision is made.",
     },
     summary: {
       type: String,
       default: "",
     },
-    qualificationStatus: {
+    // CHANGED: qualificationStatus → preliminaryScreeningIndicator
+    preliminaryScreeningIndicator: {
       type: String,
-      enum: ["PASS", "FAIL"],
-      default: "FAIL",
+      enum: ["PROGRESSED", "FURTHER REVIEW NEEDED"],
+      default: "FURTHER REVIEW NEEDED",
     },
     fitScore: {
       type: Number,
@@ -27,14 +32,19 @@ const AIAnalysisSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    // NEW: Add identifiedGaps field
+    identifiedGaps: {
+      type: [String],
+      default: [],
+    },
     interviewQuestions: {
       type: [String],
       default: [],
     },
     status: {
       type: String,
-      enum: ["PENDING", "SUCCESS", "FAILED"], // track analysis state
-      default: "FAILED",
+      enum: ["PENDING", "SUCCESS", "FAILED"],
+      default: "PENDING", // Changed from FAILED to PENDING for new analyses
     },
     analyzedAt: {
       type: Date,

@@ -22,7 +22,7 @@ export default function Page() {
   const [appsLoading, setAppsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   // Replace the old toast state with this:s
-  const [hoveredResumeId, setHoveredResumeId] = useState(null); // ✅ add this
+  const [hoveredResumeId, setHoveredResumeId] = useState(null); 
   const [toasts, setToasts] = useState([]);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const router = useRouter();
@@ -352,7 +352,7 @@ export default function Page() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Delete failed");
 
-      // ✅ Update MAIN state
+      // Update MAIN state
       setApplications(prev => prev.filter(app => app._id !== id));
 
       showToast("Application deleted", "success");
@@ -995,6 +995,17 @@ export default function Page() {
                         visible: { opacity: 1, y: 0, transition: { staggerChildren: 0.1 } },
                       }}
                     >
+                      {/* Disclaimer Banner */}
+                      <motion.div
+                        className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        <span className="text-amber-500 text-lg shrink-0">⚠️</span>
+                        <p className="text-amber-800 text-xs leading-relaxed font-medium">
+                          {aiResult.disclaimer || "ADVISORY ONLY. This is an AI-generated preliminary screen."}
+                        </p>
+                      </motion.div>
+
                       {/* Top Row: Score & Status */}
                       <motion.div
                         className="bg-[#0066e0] rounded-2xl p-7 flex justify-between items-center shadow-lg shadow-[#0066e0]/20"
@@ -1007,8 +1018,12 @@ export default function Page() {
                           </p>
                         </div>
                         <div className="text-right flex flex-col items-end">
-                          <span className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${aiResult.qualificationStatus === "PASS" ? "bg-white text-green-600" : "bg-white text-red-500"}`}>
-                            {aiResult.qualificationStatus || "PENDING"}
+                          <span className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${
+                            aiResult.preliminaryScreeningIndicator === "PROGRESSED" 
+                              ? "bg-white text-green-600" 
+                              : "bg-white text-amber-500"
+                          }`}>
+                            {aiResult.preliminaryScreeningIndicator || "FURTHER REVIEW NEEDED"}
                           </span>
                           <p className="text-5xl font-black text-white">
                             {aiResult.fitScore || 0}%
@@ -1048,6 +1063,28 @@ export default function Page() {
                         </div>
                       </motion.section>
 
+                      {/* Identified Gaps Section - NEW */}
+                      {aiResult.identifiedGaps?.length > 0 && (
+                        <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                          <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                            Areas for Development
+                            <div className="h-[1px] flex-1 bg-slate-100"></div>
+                          </h4>
+                          <ul className="space-y-2">
+                            {aiResult.identifiedGaps.map((gap, i) => (
+                              <motion.li
+                                key={i}
+                                className="flex gap-3 text-sm p-3 bg-red-50 rounded-xl border border-red-100 text-red-700"
+                                variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                              >
+                                <span className="text-red-400 shrink-0">•</span>
+                                <span className="font-medium leading-snug">{gap}</span>
+                              </motion.li>
+                            ))}
+                          </ul>
+                        </motion.section>
+                      )}
+
                       {/* Interview Questions Section */}
                       <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
                         <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
@@ -1067,6 +1104,19 @@ export default function Page() {
                           ))}
                         </ul>
                       </motion.section>
+
+                      {/* Analysis Metadata - NEW */}
+                      <motion.div
+                        className="flex justify-between items-center text-xs text-slate-400 pt-4 border-t border-slate-100"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        <span>Analyzed: {aiResult.analyzedAt ? new Date(aiResult.analyzedAt).toLocaleString() : "N/A"}</span>
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${
+                          aiResult.status === "SUCCESS" ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-500"
+                        }`}>
+                          {aiResult.status || "PENDING"}
+                        </span>
+                      </motion.div>
 
                       {/* Close Button */}
                       <motion.button

@@ -82,9 +82,9 @@ export async function POST(req) {
         const fileUrl = uploadResponse?.[0]?.data?.ufsUrl;
         if (!fileUrl) throw new Error("Upload failed");
 
-        // ✅ OCR.space API
+        // OCR.space API
         const ocrForm = new FormData();
-        ocrForm.append("apikey", "K87360289988957"); // your free OCR.space key
+        ocrForm.append("apikey", "K87360289988957");
         ocrForm.append("url", fileUrl);
         ocrForm.append("language", "eng");
         ocrForm.append("isOverlayRequired", "false");
@@ -127,27 +127,70 @@ export async function POST(req) {
             fullName: application.fullName,
             resumeText: application.resumeText,
             resumeFileLink: application.resumeFileLink,
+            jobTitle: process.env.DEFAULT_JOB_TITLE || "Software Engineer",
+            jobRequirements: process.env.DEFAULT_JOB_REQUIREMENTS || "",
           }),
         });
 
         const workatoResponseText = await workatoResponse.text();
+        
+        // DEBUG: Log raw response
+        console.log("[Workato Raw Response]:", workatoResponseText.substring(0, 500));
+        
         const outerJson = JSON.parse(workatoResponseText);
 
+        // UPDATED: Handle new schema fields from Workato
         if (outerJson && outerJson.summary) {
-          const cleanJsonString = outerJson.summary.replace(/=>/g, ":");
-          const aiData = JSON.parse(cleanJsonString);
+          // FIX: Replace Ruby syntax with JSON syntax
+          const cleanJsonString = outerJson.summary
+            .replace(/=>/g, ":")           // Ruby hash rockets to JSON colons
+            .replace(/\bnil\b/g, "null");  // Ruby nil to JSON null
 
+          let aiData;
+          try {
+            aiData = JSON.parse(cleanJsonString);
+          } catch (parseErr) {
+            console.error("JSON Parse Error:", parseErr.message);
+            console.error("Cleaned string:", cleanJsonString.substring(0, 200));
+            throw new Error("Failed to parse AI response: " + parseErr.message);
+          }
+
+          // DEBUG: Check what fitScore we received
+          console.log("[AI fitScore raw]:", aiData.fitScore, "type:", typeof aiData.fitScore);
+          console.log("[AI all keys]:", Object.keys(aiData));
+
+          // FIX: Handle fitScore - check multiple possible field names and calculate if missing
+          let fitScore = Number(aiData.fitScore ?? aiData.fit_score ?? aiData.FitScore ?? 0);
+          
+          // If still 0 or invalid, calculate based on skills
+          if (!fitScore || fitScore === 0) {
+            const skillCount = aiData.skills?.length || 0;
+            // Base 40 + 10 per skill, max 95
+            fitScore = Math.min(40 + (skillCount * 10), 95);
+            console.log(`[Calculated fitScore]: ${fitScore} based on ${skillCount} skills`);
+          } else {
+            console.log(`[Using AI fitScore]: ${fitScore}`);
+          }
+
+          // NEW SCHEMA: Map to updated AIAnalysis fields
           await AIAnalysis.create({
             applicationId: application._id,
+            disclaimer: aiData.disclaimer || "ADVISORY ONLY. This is an AI-generated preliminary screen. A qualified recruiter must review this output before any recruitment decision is made.",
             summary: aiData.summary || "",
-            qualificationStatus: aiData.qualificationStatus || "FAIL",
-            fitScore: Number(aiData.fitScore) || 0,
+            preliminaryScreeningIndicator: aiData.preliminaryScreeningIndicator || "FURTHER REVIEW NEEDED",
+            fitScore: fitScore, // Use the calculated or received score
             skills: aiData.skills || [],
+            identifiedGaps: aiData.identifiedGaps || [],
             interviewQuestions: aiData.interviewQuestions || [],
+            status: "SUCCESS", // <-- ADD THIS LINE
           });
 
           application.status = "analyzed";
           await application.save();
+        } else {
+          // Handle case where Workato response doesn't have summary
+          console.error("Workato response missing summary:", outerJson);
+          throw new Error("AI analysis failed: " + (outerJson?.message || "No summary in response"));
         }
 
         results.push({ success: true, fullName: application.fullName });
