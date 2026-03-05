@@ -1,65 +1,1200 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_TYPES = ["application/pdf"];
+
+function Skeleton({ className = "" }) {
+  return <div className={`rounded-lg bg-slate-200 animate-pulse-slow ${className}`} />;
+}
+
+export default function Page() {
+  // ---------- State ----------
+  const [files, setFiles] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [dragActive, setDragActive] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [appsLoading, setAppsLoading] = useState(true);
+  const [progress, setProgress] = useState(0);
+  // Replace the old toast state with this:s
+  const [hoveredResumeId, setHoveredResumeId] = useState(null); 
+  const [toasts, setToasts] = useState([]);
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const router = useRouter();
+
+  // Drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedApp, setSelectedApp] = useState(null);
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false); // NEW
+  const [appToDelete, setAppToDelete] = useState(null);           // NEW
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [appToAnalyze, setAppToAnalyze] = useState(null);
+
+  const recentApplications = applications.slice(0, 3);
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashExiting, setSplashExiting] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  const [selectedResume, setSelectedResume] = useState(null);
+  const [resumes, setResumes] = useState([]); // your resume data
+  const [sortOption, setSortOption] = useState("latest"); // default: latest to oldest
+
+  // ---------- Sorted & Filtered ----------
+  // ---------- Derived Variables ----------
+  const ITEMS_PER_PAGE = 10;
+  const filteredApplications = applications.filter(
+    (app) =>
+      app.fullName.toLowerCase().includes(search.toLowerCase()) ||
+      app.email.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const sortedApplications = useMemo(() => {
+    return [...applications]
+      .filter(app =>
+        app.fullName.toLowerCase().includes(search.toLowerCase()) ||
+        app.email.toLowerCase().includes(search.toLowerCase())
+      )
+      .sort((a, b) => {
+        switch (sortOption) {
+          case "latest": return new Date(b.createdAt) - new Date(a.createdAt);
+          case "oldest": return new Date(a.createdAt) - new Date(b.createdAt);
+          case "name-asc": return a.fullName.localeCompare(b.fullName);
+          case "name-desc": return b.fullName.localeCompare(a.fullName);
+          default: return 0;
+        }
+      });
+  }, [applications, search, sortOption]);
+
+  // ---------- Pagination ----------
+  const totalPages = Math.max(1, Math.ceil(sortedApplications.length / ITEMS_PER_PAGE));
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentApplications = sortedApplications.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  function handleSelectResume(app) {
+    setSelectedResume(app); // store the clicked resume
+    handleEditSelect(app._id); // existing logic if needed
+  }
+
+  useEffect(() => {
+    if (analysisModalOpen) {
+      setIsVisible(true);
+    } else {
+      const timeout = setTimeout(() => setIsVisible(false), 400);
+      return () => clearTimeout(timeout);
+    }
+  }, [analysisModalOpen]);
+
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const splashEl = document.querySelector(".splash-screen");
+      if (splashEl) splashEl.classList.add("splash-exit");
+
+      // Remove splash after animation
+      setTimeout(() => setShowSplash(false), 1000); // match animation duration
+    }, 2500); // time before splash exits
+
+    return () => clearTimeout(timer);
+  }, []);
+
+
+  // ---------- Toast ----------
+  // Updated showToast to push to the array
+  // ---------- Toast ----------
+  function showToast(message, type = "error") {
+    const id = Date.now() + Math.random();
+    const toast = { id, message, type, visible: true }; // <-- add visible here
+
+    setToasts((prev) => [...prev, toast]);
+
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }
+
+  useEffect(() => {
+    fetchApplications();
+  }, []); // ok: empty deps array, runs only once
+
+  async function fetchApplications() {
+    setAppsLoading(true);
+    try {
+      const res = await fetch("/api/applications");
+      if (!res.ok) throw new Error("Failed to fetch applications");
+      const data = await res.json();
+      if (!data?.success) throw new Error(data?.error || "Backend returned error");
+
+      const sorted = (data.applications || []).sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      setApplications(sorted);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Failed to load applications");
+    } finally {
+      setAppsLoading(false);
+    }
+  }
+
+  // ---------- File Handling ----------
+  function validateFile(file) {
+    if (!ALLOWED_TYPES.includes(file.type)) return `${file.name}: invalid file type`;
+    if (file.size > MAX_FILE_SIZE) return `${file.name}: exceeds 10MB`;
+    return null;
+  }
+
+  function addFiles(fileList) {
+    setFiles((prev) => {
+      const existing = new Set(prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`));
+      const valid = [];
+
+      for (const file of fileList) {
+        const error = validateFile(file);
+        if (error) {
+          showToast(error);
+          continue;
+        }
+
+        const key = `${file.name}-${file.size}-${file.lastModified}`;
+        if (existing.has(key)) {
+          showToast(`${file.name} already added`);
+          continue;
+        }
+
+        valid.push(file);
+      }
+
+      return [...prev, ...valid];
+    });
+  }
+
+  function handleDrag(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(e.type === "dragenter" || e.type === "dragover");
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    // Filter for PDFs only from the dropped files
+    const droppedFiles = Array.from(e.dataTransfer.files).filter(
+      (file) => file.type === "application/pdf"
+    );
+
+    if (droppedFiles.length === 0 && e.dataTransfer.files.length > 0) {
+      showToast("Please drop PDF files only.", "error");
+      return;
+    }
+
+    addFiles(droppedFiles);
+  }
+
+  function handleFileChange(e) {
+    if (!e.target.files) return;
+
+    // Filter for PDFs only from the selected files
+    const selectedFiles = Array.from(e.target.files).filter(
+      (file) => file.type === "application/pdf"
+    );
+
+    if (selectedFiles.length === 0 && e.target.files.length > 0) {
+      showToast("Only PDF files are allowed.", "error");
+      e.target.value = "";
+      return;
+    }
+
+    addFiles(selectedFiles);
+    e.target.value = "";
+  }
+
+  function removeFile(index) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // ---------- Submit ----------
+  async function submitResumes() {
+    if (!files.length) {
+      showToast("No file selected");
+      return;
+    }
+
+    setLoading(true);
+    setProgress(0);
+
+    let successCount = 0; // Track how many actually uploaded
+    let duplicateCount = 0; // Track how many were skipped
+
+    let fakeProgress = 0;
+    const interval = setInterval(() => {
+      fakeProgress += Math.random() * 7;
+      if (fakeProgress >= 90) fakeProgress = 90;
+      setProgress(Math.floor(fakeProgress));
+    }, 200);
+
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("resume", file);
+
+        const res = await fetch("/api/applications", { method: "POST", body: fd });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data?.error || "Upload failed");
+
+        const fileResult = data.results?.[0];
+
+        if (fileResult && !fileResult.success) {
+          if (fileResult.isDuplicate) {
+            // Specific toast for this file
+            showToast(`${file.name} already exists.`, "info");
+            duplicateCount++;
+            continue;
+          } else {
+            throw new Error(fileResult.error || "File processing failed");
+          }
+        }
+
+        // If we got here, it was a real success
+        successCount++;
+      }
+
+      clearInterval(interval);
+      setProgress(100);
+      await fetchApplications();
+      setFiles([]);
+
+      // --- Smart Final Message ---
+      if (successCount > 0) {
+        showToast(`Successfully processed ${successCount} resume(s).`, "success");
+      } else if (duplicateCount > 0 && successCount === 0) {
+        showToast("No new resumes added (all files already exist).", "info");
+      }
+
+    } catch (err) {
+      clearInterval(interval);
+      showToast(err.message || "Upload failed");
+    } finally {
+      setLoading(false);
+      setTimeout(() => setProgress(0), 500);
+    }
+  }
+
+  function viewResume(app) {
+    window.open(`/api/applications/${app._id}/resume`, "_blank");
+  }
+
+  // --- Updated analyzeResume Function ---
+  async function analyzeResume(app) {
+    setAppToAnalyze(app);
+    setAnalysisModalOpen(true);
+    setAnalysisLoading(true);
+
+    try {
+      const res = await fetch(`/api/applications/${app._id}`, { method: "POST" });
+      const data = await res.json();
+
+      if (data.success) {
+        // This maps the MongoDB fields into your state
+        setAiResult(data.analysis);
+      } else {
+        setAiResult(null);
+        console.error("Analysis not found in DB");
+      }
+    } catch (err) {
+      console.error("Fetch error:", err);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }
+
+
+
+  // Drawer
+  function openDrawer(app) {
+    if (!app.resumeFileLink) {
+      showToast(`No resume available for ${app.fullName}`, "error");
+      return;
+    }
+
+    setSelectedApp({ ...app, pdfUrl: app.resumeFileLink }); // use resumeFileLink here
+    setDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setSelectedApp(null);
+  }
+
+
+
+  async function deleteApplication(id) {
+    if (!id) {
+      showToast("Missing application ID", "error");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/applications/${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Delete failed");
+
+      // Update MAIN state
+      setApplications(prev => prev.filter(app => app._id !== id));
+
+      showToast("Application deleted", "success");
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Delete failed", "error");
+    }
+  }
+
+  if (showSplash) {
+    return (
+      <div className="splash-screen">
+        <div className={`splash-content ${splashExiting ? "splash-exit" : ""}`}>
+          <div className="logo-wrapper">
+            <div className="logo-left" />
+            <div className="logo-right" />
+          </div>
+          <h1 className="splash-text">Career Agent</h1>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen flex bg-slate-100 relative overflow-hidden">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white border-r flex flex-col shadow-sm animate-slide-in-left animate-delay-100">
+        {/* Logo Section */}
+        <div className="h-20 flex items-center justify-center border-b">
+          <img
+            src="/aretex.png"
+            alt="Aretex Logo"
+            className="h-10 w-auto object-contain"
+          />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-4 py-6 space-y-2">
+          <div className="px-4 py-3 bg-[#F29035] text-white rounded-lg font-medium shadow-sm">
+            Resume
+          </div>
+        </nav>
+      </aside>
+
+
+      {/* Main content */}
+      <main className="flex-1 relative flex flex-col">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-[#0049af] to-[#0066e0] h-36 rounded-bl-[40px] px-10 pt-8 text-white animate-slide-in-down animate-delay-200 relative z-10">
+          <h2 className="text-2xl font-semibold">Career Agent</h2>
         </div>
+
+        {/* Content grid */}
+        <div className="px-10 -mt-16 flex-1 overflow-auto relative z-20">
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
+
+            {/* LEFT */}
+            <div className="w-full lg:w-[35%] flex-shrink-0 space-y-6">
+
+              {/* Upload Panel */}
+              <section className="bg-white rounded-xl shadow-sm p-6 animate-slide-in animate-delay-300">
+                <h2 className="text-lg font-semibold mb-4">Upload Resumes</h2>
+                <div
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                  className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ${dragActive
+                    ? "border-[#0049af] bg-blue-50"
+                    : "border-slate-300 hover:border-[#0049af]"
+                    }`}
+                >
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf"
+                    onChange={handleFileChange}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
+                  <p className="text-sm font-medium">Drag & drop resumes</p>
+                  <p className="text-xs text-slate-400 mt-1">or click to browse</p>
+                </div>
+
+                {files.map((file, i) => (
+                  <div
+                    key={i}
+                    className="mt-2 flex justify-between border rounded px-3 py-2 text-sm"
+                  >
+                    <span className="truncate">{file.name}</span>
+                    <button
+                      onClick={() => removeFile(i)}
+                      className="text-red-500 text-xs"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+
+                {loading && (
+                  <div className="mt-4">
+                    <div className="h-2 bg-slate-200 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-[#0049af]"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs mt-1 text-slate-500">
+                      Processing… {progress}%
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={submitResumes}
+                  disabled={!files.length || loading}
+                  className="mt-4 w-full bg-[#0049af] disabled:bg-slate-300 text-white py-2.5 rounded-lg"
+                >
+                  {loading ? "Processing…" : "Submit Resumes"}
+                </button>
+              </section>
+
+              {/* Recently Added */}
+              <section className="bg-white rounded-xl shadow-sm p-6 animate-slide-in animate-delay-400">
+                <h2 className="text-lg font-semibold mb-4">Recently Added</h2>
+
+                {appsLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : recentApplications.length ? (
+                  <ul className="space-y-3">
+                    {recentApplications.map((app) => (
+                      <li
+                        key={app._id}
+                        className="border rounded-lg px-3 py-2 flex justify-between items-center"
+                      >
+                        <div>
+                          <div className="text-sm font-medium truncate">
+                            {app.fullName}
+                          </div>
+                          <div className="text-xs text-slate-500 truncate">
+                            {app.email}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1">
+                            {new Date(app.createdAt).toLocaleString(undefined, {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            })}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-slate-400 text-center py-6">
+                    No resumes yet
+                  </div>
+                )}
+              </section>
+
+              <section className="bg-white rounded-xl shadow-lg p-6 animate-slide-in animate-delay-500">
+                <h2 className="text-xl font-semibold mb-6 text-slate-700">
+                  {selectedResume ? "Resume Details" : "Statistics"}
+                </h2>
+
+                <div className="space-y-6">
+                  <AnimatePresence mode="wait">
+                    {selectedResume ? (
+                      <motion.div
+                        key="details"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        {/* Editable Full Name */}
+                        <div className="flex flex-col">
+                          <label className="text-xs text-slate-500 mb-1">Full Name</label>
+                          <input
+                            type="text"
+                            value={selectedResume.fullName}
+                            onChange={(e) =>
+                              setSelectedResume({ ...selectedResume, fullName: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+                          />
+                        </div>
+
+                        {/* Editable Email */}
+                        <div className="flex flex-col">
+                          <label className="text-xs text-slate-500 mb-1">Email</label>
+                          <input
+                            type="email"
+                            value={selectedResume.email}
+                            onChange={(e) =>
+                              setSelectedResume({ ...selectedResume, email: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+                          />
+                        </div>
+
+                        {/* Save Button */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/applications/${selectedResume._id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  fullName: selectedResume.fullName,
+                                  email: selectedResume.email,
+                                }),
+                              });
+
+                              if (!res.ok) throw new Error("Failed to update application");
+
+                              const updated = await res.json();
+                              setSelectedResume(null); // <-- Switch back to Statistics after save
+                              setApplications((prev) =>
+                                prev.map((app) => (app._id === updated._id ? updated : app))
+                              );
+                              showToast("Application updated successfully!", "success");
+                            } catch (err) {
+                              console.error(err);
+                              showToast("Failed to update application.", "error");
+                            }
+                          }}
+                          className="mt-5 w-full sm:w-auto px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
+                        >
+                          Save
+                        </button>
+                      </motion.div>
+                    ) : (
+                      /* Statistics Section */
+                      <motion.div
+                        key="stats"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="flex items-center p-4 bg-purple-50 rounded-lg shadow-sm">
+                            <div className="p-2 bg-purple-200 rounded-full text-purple-800 mr-3">
+                              {/* Resume Icon */}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9M12 4h9M3 8h9M3 16h9" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-sm text-slate-500">Total Resumes</p>
+                              <p className="text-lg font-semibold">{applications.length}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center p-4 bg-yellow-50 rounded-lg shadow-sm">
+                            <div className="p-2 bg-yellow-200 rounded-full text-yellow-800 mr-3">
+                              {/* Calendar Icon */}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3M16 7V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-sm text-slate-500">Uploaded Today</p>
+                              <p className="text-lg font-semibold">
+                                {applications.filter(app => new Date(app.createdAt).toDateString() === new Date().toDateString()).length}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </section>
+            </div>
+
+            {/* RIGHT */}
+            <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 w-full">
+                {/* Title */}
+                <h2 className="text-lg font-semibold flex-shrink-0">
+                  Recently Uploaded Resumes
+                </h2>
+
+                {/* Search Input with SVG */}
+                <div className="relative flex-1 w-full sm:w-64">
+                  <input
+                    type="text"
+                    placeholder="Search resume..."
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full px-4 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0049af] focus:border-[#0049af] transition-all placeholder:text-slate-400"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Sort Dropdown */}
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value)}
+                  className="w-full sm:w-auto px-4 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0049af] focus:border-[#0049af] transition-all bg-white cursor-pointer"
+                >
+                  <option value="latest">Latest → Oldest</option>
+                  <option value="oldest">Oldest → Latest</option>
+                  <option value="name-asc">Name A → Z</option>
+                  <option value="name-desc">Name Z → A</option>
+                </select>
+
+                {/* Refresh Button */}
+                <button
+                  onClick={fetchApplications}
+                  disabled={appsLoading}
+                  className={`w-full sm:w-auto px-4 py-2 bg-[#0049af] text-white rounded-lg flex items-center gap-2 justify-center
+        transition-colors duration-300 relative overflow-hidden
+        ${appsLoading ? "cursor-wait bg-[#003580]" : "hover:bg-[#003580]"}`}
+                >
+                  {/* Refresh Icon */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`h-5 w-5 text-white transition-transform duration-500 ease-in-out
+          ${appsLoading ? "animate-spin" : "hover:rotate-180"}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0112-6.93M20 15a8 8 0 01-12 6.93"
+                    />
+                  </svg>
+
+                  {/* Button text */}
+                  <span className="relative z-10">
+                    {appsLoading ? "Refreshing…" : "Refresh"}
+                  </span>
+
+                  {/* Optional subtle overlay glow */}
+                  <span className="absolute inset-0 rounded-lg bg-white/10 opacity-0 transition-opacity duration-300 pointer-events-none hover:opacity-20"></span>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto bg-white rounded-xl p-1">
+                {appsLoading ? (
+                  <div className="space-y-2">
+                    {[...Array(6)].map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : currentApplications.length ? (
+                  <ul className="space-y-2 relative bg-white">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {currentApplications.map((app, i) => (
+                        <motion.li
+                          key={app._id}
+                          layout
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          transition={{ duration: 0.3, delay: i * 0.05 }}
+                          className={`border rounded px-4 py-3 flex justify-between items-center shadow-sm cursor-pointer
+                ${selectedResume?._id === app._id ? "ring-2 ring-[#0049af] bg-blue-50" : ""}
+                ${hoveredResumeId === app._id && selectedResume?._id !== app._id ? "bg-blue-50" : "bg-white"}
+              `}
+                          onMouseEnter={() => setHoveredResumeId(app._id)}
+                          onMouseLeave={() => setHoveredResumeId(null)}
+                          onClick={() => setSelectedResume(app)}
+                        >
+                          <div>
+                            <div className="font-medium">{app.fullName}</div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <span>{app.email}</span>
+                              <span
+                                className={`inline-block px-2 py-0.5 text-[10px] font-black rounded-full ${app.status === "uploaded"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : app.status === "processing"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : app.status === "analyzed"
+                                      ? "bg-green-100 text-green-700"
+                                      : app.status === "completed"
+                                        ? "bg-green-600 text-white"
+                                        : app.status === "failed"
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-gray-100 text-gray-500"
+                                  }`}
+                              >
+                                {app.status.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openDrawer(app); }}
+                              className="px-3 py-1 text-xs rounded border transition-transform duration-300 hover:scale-105 hover:bg-slate-100"
+                            >
+                              View
+                            </button>
+
+                            <button
+                              onClick={(e) => { e.stopPropagation(); analyzeResume(app); }}
+                              className="px-3 py-1 text-xs rounded bg-[#0049af] text-white transition-transform duration-300 hover:scale-105 hover:bg-[#003580]"
+                            >
+                              Analyze AI
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!app?._id) {
+                                  showToast("Cannot delete: Missing ID", "error");
+                                  return;
+                                }
+                                setAppToDelete(app);
+                                setDeleteModalOpen(true);
+                              }}
+                              className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                ) : (
+                  <div className="h-32 flex items-center justify-center text-slate-400 bg-white">
+                    No Uploaded Resumes
+                  </div>
+                )}
+              </div>
+
+              {/* Pagination */}
+              {currentApplications.length > 0 && (
+                <div className="mt-4 flex items-center justify-between border-t pt-4 text-sm">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="text-slate-500 disabled:opacity-40"
+                  >
+                    ← Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }).map((_, i) => {
+                      const page = i + 1;
+                      const show =
+                        page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
+
+                      if (!show) {
+                        if (page === currentPage - 2 || page === currentPage + 2) {
+                          return (
+                            <span key={page} className="px-2 text-slate-400">
+                              …
+                            </span>
+                          );
+                        }
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`min-w-[36px] h-9 px-3 rounded-lg ${page === currentPage ? "bg-[#0049af] text-white" : "hover:bg-slate-100"
+                            }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="text-slate-500 disabled:opacity-40"
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+
       </main>
-    </div>
+
+      {/* Drawer */}
+      {/* Slide-in Drawer */}
+      <div
+        className={`fixed top-0 right-0 h-full w-[900px] bg-white z-50 shadow-2xl
+    transform transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
+    ${drawerOpen ? "translate-x-0" : "translate-x-full pointer-events-none"}
+    flex flex-col
+  `}
+      >
+        {/* Header */}
+        <div className="p-6 border-b flex justify-between items-center flex-shrink-0">
+          <div>
+            <h3 className="font-semibold text-lg">{selectedApp?.fullName}</h3>
+            <p className="text-xs text-slate-500">{selectedApp?.email}</p>
+          </div>
+
+          <button
+            onClick={closeDrawer}
+            className="text-xl font-bold transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] hover:scale-110 hover:text-red-500 active:scale-95"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* PDF Viewer: Scrollable only inside drawer */}
+        <div
+          className="flex-1 p-6 overflow-auto overscroll-contain"
+        >
+          {selectedApp?.pdfUrl ? (
+            <iframe
+              src={selectedApp.pdfUrl}
+              className="w-full h-full rounded-xl border shadow-sm"
+              title={`Resume Preview - ${selectedApp.fullName}`}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-400">
+              No preview available
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* NEW STACKABLE TOASTS */}
+      <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((t, i) => (
+            <motion.li
+              key={t.id}
+              layout
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, delay: i * 0.05 }}
+              className="border rounded px-4 py-3 flex items-center gap-3 shadow-sm bg-white"
+            >
+              <div
+                className={`w-3 h-3 rounded-full ${t.type === "success"
+                  ? "bg-green-500"
+                  : t.type === "error"
+                    ? "bg-red-500"
+                    : "bg-blue-500"
+                  }`}
+              />
+
+              <span className="font-medium text-sm">{t.message}</span>
+            </motion.li>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* AI Analysis Modal */}
+      <AnimatePresence>
+        {analysisModalOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              onClick={() => setAnalysisModalOpen(false)}
+              className="fixed inset-0 z-40 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            />
+
+            {/* Modal Card */}
+            <motion.div
+              className="fixed inset-0 flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl shadow-[0_0_50px_-10px_rgba(0,102,224,0.3)] overflow-hidden max-h-[90vh] flex flex-col">
+
+                {/* Header */}
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-[#0066e0]/10 rounded-xl">
+                      <span className="text-[#0066e0] text-xl">✨</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">AI Candidate Report</h3>
+                  </div>
+                  <button
+                    onClick={() => setAnalysisModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Scrollable Content */}
+                <div className="p-8 overflow-y-auto custom-scrollbar bg-slate-50/30">
+                  {analysisLoading ? (
+                    <div className="flex flex-col items-center py-20 text-center">
+                      <div className="w-12 h-12 border-4 border-[#0066e0]/10 border-t-[#0066e0] rounded-full animate-spin mb-4" />
+                      <p className="text-slate-600 font-medium">
+                        Generating Report for {appToAnalyze?.fullName}...
+                      </p>
+                    </div>
+                  ) : aiResult ? (
+                    <motion.div
+                      className="space-y-8"
+                      initial="hidden"
+                      animate="visible"
+                      exit="hidden"
+                      variants={{
+                        hidden: { opacity: 0, y: 10 },
+                        visible: { opacity: 1, y: 0, transition: { staggerChildren: 0.1 } },
+                      }}
+                    >
+                      {/* Disclaimer Banner */}
+                      <motion.div
+                        className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        <span className="text-amber-500 text-lg shrink-0">⚠️</span>
+                        <p className="text-amber-800 text-xs leading-relaxed font-medium">
+                          {aiResult.disclaimer || "ADVISORY ONLY. This is an AI-generated preliminary screen."}
+                        </p>
+                      </motion.div>
+
+                      {/* Top Row: Score & Status */}
+                      <motion.div
+                        className="bg-[#0066e0] rounded-2xl p-7 flex justify-between items-center shadow-lg shadow-[#0066e0]/20"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        <div>
+                          <p className="text-blue-100 text-xs font-bold uppercase tracking-widest">Match Score</p>
+                          <p className="text-2xl font-bold text-white mt-1">
+                            {aiResult.fitScore > 80 ? "Highly Qualified" : "Candidate Match"}
+                          </p>
+                        </div>
+                        <div className="text-right flex flex-col items-end">
+                          <span className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${
+                            aiResult.preliminaryScreeningIndicator === "PROGRESSED" 
+                              ? "bg-white text-green-600" 
+                              : "bg-white text-amber-500"
+                          }`}>
+                            {aiResult.preliminaryScreeningIndicator || "FURTHER REVIEW NEEDED"}
+                          </span>
+                          <p className="text-5xl font-black text-white">
+                            {aiResult.fitScore || 0}%
+                          </p>
+                        </div>
+                      </motion.div>
+
+                      {/* Summary Section */}
+                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Executive Summary
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
+                        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+                          <p className="text-slate-700 text-sm leading-relaxed font-medium italic">
+                            "{aiResult.summary}"
+                          </p>
+                        </div>
+                      </motion.section>
+
+                      {/* Skills Section */}
+                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Core Skills
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {aiResult.skills?.map((skill, i) => (
+                            <motion.span
+                              key={i}
+                              className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200"
+                              variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                            >
+                              {skill}
+                            </motion.span>
+                          ))}
+                        </div>
+                      </motion.section>
+
+                      {/* Identified Gaps Section - NEW */}
+                      {aiResult.identifiedGaps?.length > 0 && (
+                        <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                          <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                            Areas for Development
+                            <div className="h-[1px] flex-1 bg-slate-100"></div>
+                          </h4>
+                          <ul className="space-y-2">
+                            {aiResult.identifiedGaps.map((gap, i) => (
+                              <motion.li
+                                key={i}
+                                className="flex gap-3 text-sm p-3 bg-red-50 rounded-xl border border-red-100 text-red-700"
+                                variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                              >
+                                <span className="text-red-400 shrink-0">•</span>
+                                <span className="font-medium leading-snug">{gap}</span>
+                              </motion.li>
+                            ))}
+                          </ul>
+                        </motion.section>
+                      )}
+
+                      {/* Interview Questions Section */}
+                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Recommended Questions
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
+                        <ul className="space-y-3">
+                          {aiResult.interviewQuestions?.map((q, i) => (
+                            <motion.li
+                              key={i}
+                              className="flex gap-4 text-sm p-4 bg-white rounded-xl border border-slate-100 hover:border-[#0066e0]/30 transition-all shadow-sm"
+                              variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                            >
+                              <span className="text-[#0066e0] font-black">0{i + 1}</span>
+                              <span className="text-slate-700 font-medium leading-snug">{q}</span>
+                            </motion.li>
+                          ))}
+                        </ul>
+                      </motion.section>
+
+                      {/* Analysis Metadata - NEW */}
+                      <motion.div
+                        className="flex justify-between items-center text-xs text-slate-400 pt-4 border-t border-slate-100"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        <span>Analyzed: {aiResult.analyzedAt ? new Date(aiResult.analyzedAt).toLocaleString() : "N/A"}</span>
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${
+                          aiResult.status === "SUCCESS" ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-500"
+                        }`}>
+                          {aiResult.status || "PENDING"}
+                        </span>
+                      </motion.div>
+
+                      {/* Close Button */}
+                      <motion.button
+                        onClick={() => setAnalysisModalOpen(false)}
+                        className="w-full bg-[#0066e0] hover:bg-[#0052b3] text-white font-bold py-4 rounded-2xl transition-all mt-4 shadow-lg shadow-[#0066e0]/25 active:scale-[0.98]"
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
+                        Done Reading
+                      </motion.button>
+                    </motion.div>
+                  ) : (
+                    <div className="text-center py-10 text-slate-400">
+                      Analysis data unavailable.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Modal */}
+      {
+        deleteModalOpen && (
+          <>
+            <div
+              onClick={() => setDeleteModalOpen(false)}
+              className="fixed inset-0 bg-black/40 z-40"
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 w-96 shadow-lg animate-fade-up">
+                <h3 className="text-lg font-semibold mb-4">Delete Application</h3>
+                <p className="text-sm text-slate-500 mb-6">
+                  Are you sure you want to delete <strong>{appToDelete?.fullName}</strong>? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setDeleteModalOpen(false)}
+                    className="px-4 py-2 text-sm rounded border hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      const id = appToDelete?._id;
+                      if (!id) return;
+
+                      try {
+                        const res = await fetch(`/api/applications/${id}`, {
+                          method: "DELETE"
+                        });
+
+                        if (!res.ok) throw new Error("Failed to delete application");
+
+                        setApplications(prev =>
+                          prev.filter(app => app._id !== id)
+                        );
+
+                        showToast("Application deleted successfully", "success");
+                        setDeleteModalOpen(false);
+                        setAppToDelete(null);
+
+                      } catch (err) {
+                        showToast(err.message, "error");
+                      }
+                    }}
+                    className="px-4 py-2 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )
+      }
+    </div >
   );
 }
