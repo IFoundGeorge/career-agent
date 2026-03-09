@@ -22,7 +22,7 @@ export default function Page() {
   const [appsLoading, setAppsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   // Replace the old toast state with this:s
-  const [hoveredResumeId, setHoveredResumeId] = useState(null); 
+  const [hoveredResumeId, setHoveredResumeId] = useState(null); // ✅ add this
   const [toasts, setToasts] = useState([]);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const router = useRouter();
@@ -352,7 +352,7 @@ export default function Page() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Delete failed");
 
-      // Update MAIN state
+      // ✅ Update MAIN state
       setApplications(prev => prev.filter(app => app._id !== id));
 
       showToast("Application deleted", "success");
@@ -556,13 +556,32 @@ export default function Page() {
                             onChange={(e) =>
                               setSelectedResume({ ...selectedResume, email: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+                            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition
+      ${selectedResume.email &&
+                                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(selectedResume.email)
+                                ? "border-red-500 focus:ring-red-400"
+                                : "border-slate-300 focus:ring-2 focus:ring-blue-400"
+                              }
+    `}
                           />
                         </div>
 
                         {/* Save Button */}
                         <button
                           onClick={async () => {
+                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+                            // Validate inputs
+                            if (!selectedResume.fullName.trim() || !selectedResume.email.trim()) {
+                              showToast("Full Name and Email cannot be empty.", "error");
+                              return;
+                            }
+
+                            if (!emailRegex.test(selectedResume.email)) {
+                              showToast("Invalid email format.", "error");
+                              return;
+                            }
+
                             try {
                               const res = await fetch(`/api/applications/${selectedResume._id}`, {
                                 method: "PATCH",
@@ -576,7 +595,7 @@ export default function Page() {
                               if (!res.ok) throw new Error("Failed to update application");
 
                               const updated = await res.json();
-                              setSelectedResume(null); // <-- Switch back to Statistics after save
+                              setSelectedResume(null); // Switch back to Statistics after save
                               setApplications((prev) =>
                                 prev.map((app) => (app._id === updated._id ? updated : app))
                               );
@@ -586,7 +605,12 @@ export default function Page() {
                               showToast("Failed to update application.", "error");
                             }
                           }}
-                          className="mt-5 w-full sm:w-auto px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
+                          disabled={!selectedResume.fullName.trim() || !selectedResume.email.trim()}
+                          className={`mt-5 w-full sm:w-auto px-6 py-2 font-medium rounded-lg transition-all shadow-md
+    ${!selectedResume.fullName.trim() || !selectedResume.email.trim()
+                              ? "bg-slate-300 cursor-not-allowed"
+                              : "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg"
+                            }`}
                         >
                           Save
                         </button>
@@ -949,7 +973,7 @@ export default function Page() {
               transition={{ duration: 0.3 }}
             />
 
-            {/* Modal Card */}
+            {/* Modal */}
             <motion.div
               className="fixed inset-0 flex items-center justify-center z-50 p-4"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -965,8 +989,11 @@ export default function Page() {
                     <div className="p-2 bg-[#0066e0]/10 rounded-xl">
                       <span className="text-[#0066e0] text-xl">✨</span>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">AI Candidate Report</h3>
+                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">
+                      AI Candidate Report
+                    </h3>
                   </div>
+
                   <button
                     onClick={() => setAnalysisModalOpen(false)}
                     className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all"
@@ -977,6 +1004,7 @@ export default function Page() {
 
                 {/* Scrollable Content */}
                 <div className="p-8 overflow-y-auto custom-scrollbar bg-slate-50/30">
+
                   {analysisLoading ? (
                     <div className="flex flex-col items-center py-20 text-center">
                       <div className="w-12 h-12 border-4 border-[#0066e0]/10 border-t-[#0066e0] rounded-full animate-spin mb-4" />
@@ -984,7 +1012,9 @@ export default function Page() {
                         Generating Report for {appToAnalyze?.fullName}...
                       </p>
                     </div>
+
                   ) : aiResult ? (
+
                     <motion.div
                       className="space-y-8"
                       initial="hidden"
@@ -992,51 +1022,54 @@ export default function Page() {
                       exit="hidden"
                       variants={{
                         hidden: { opacity: 0, y: 10 },
-                        visible: { opacity: 1, y: 0, transition: { staggerChildren: 0.1 } },
+                        visible: { opacity: 1, y: 0, transition: { staggerChildren: 0.1 } }
                       }}
                     >
-                      {/* Disclaimer Banner */}
-                      <motion.div
-                        className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start"
-                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
-                      >
-                        <span className="text-amber-500 text-lg shrink-0">⚠️</span>
-                        <p className="text-amber-800 text-xs leading-relaxed font-medium">
-                          {aiResult.disclaimer || "ADVISORY ONLY. This is an AI-generated preliminary screen."}
-                        </p>
-                      </motion.div>
 
-                      {/* Top Row: Score & Status */}
+                      {/* Score & Status */}
                       <motion.div
                         className="bg-[#0066e0] rounded-2xl p-7 flex justify-between items-center shadow-lg shadow-[#0066e0]/20"
                         variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
                       >
                         <div>
-                          <p className="text-blue-100 text-xs font-bold uppercase tracking-widest">Match Score</p>
+                          <p className="text-blue-100 text-xs font-bold uppercase tracking-widest">
+                            Match Score
+                          </p>
+
                           <p className="text-2xl font-bold text-white mt-1">
-                            {aiResult.fitScore > 80 ? "Highly Qualified" : "Candidate Match"}
+                            {aiResult?.fitScore != null
+                              ? (aiResult.fitScore >= 80 ? "Highly Qualified" : "Candidate Match")
+                              : "Candidate Match"}
                           </p>
                         </div>
+
                         <div className="text-right flex flex-col items-end">
-                          <span className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${
-                            aiResult.preliminaryScreeningIndicator === "PROGRESSED" 
-                              ? "bg-white text-green-600" 
-                              : "bg-white text-amber-500"
-                          }`}>
-                            {aiResult.preliminaryScreeningIndicator || "FURTHER REVIEW NEEDED"}
+
+                          <span
+                            className={`inline-block px-4 py-1 text-[10px] font-black rounded-full mb-2 shadow-sm ${aiResult.preliminaryScreeningIndicator === "PASS"
+                              ? "bg-white text-green-600"
+                              : "bg-white text-orange-600"
+                              }`}
+                          >
+                            {aiResult.preliminaryScreeningIndicator || "PENDING"}
                           </span>
+
                           <p className="text-5xl font-black text-white">
                             {aiResult.fitScore || 0}%
                           </p>
+
                         </div>
                       </motion.div>
 
-                      {/* Summary Section */}
-                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                      {/* Summary */}
+                      <motion.section
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
                         <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
                           Executive Summary
                           <div className="h-[1px] flex-1 bg-slate-100"></div>
                         </h4>
+
                         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
                           <p className="text-slate-700 text-sm leading-relaxed font-medium italic">
                             "{aiResult.summary}"
@@ -1044,94 +1077,96 @@ export default function Page() {
                         </div>
                       </motion.section>
 
-                      {/* Skills Section */}
-                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                      {/* Skills */}
+                      <motion.section
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
                         <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
                           Core Skills
                           <div className="h-[1px] flex-1 bg-slate-100"></div>
                         </h4>
+
                         <div className="flex flex-wrap gap-2">
                           {aiResult.skills?.map((skill, i) => (
-                            <motion.span
+                            <span
                               key={i}
                               className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg border border-slate-200"
-                              variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
                             >
                               {skill}
-                            </motion.span>
+                            </span>
                           ))}
                         </div>
                       </motion.section>
 
-                      {/* Identified Gaps Section - NEW */}
-                      {aiResult.identifiedGaps?.length > 0 && (
-                        <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
-                          <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
-                            Areas for Development
-                            <div className="h-[1px] flex-1 bg-slate-100"></div>
-                          </h4>
-                          <ul className="space-y-2">
-                            {aiResult.identifiedGaps.map((gap, i) => (
-                              <motion.li
-                                key={i}
-                                className="flex gap-3 text-sm p-3 bg-red-50 rounded-xl border border-red-100 text-red-700"
-                                variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
-                              >
-                                <span className="text-red-400 shrink-0">•</span>
-                                <span className="font-medium leading-snug">{gap}</span>
-                              </motion.li>
-                            ))}
-                          </ul>
-                        </motion.section>
-                      )}
-
-                      {/* Interview Questions Section */}
-                      <motion.section variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                      {/* Identified Gaps */}
+                      <motion.section
+                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+                      >
                         <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
-                          Recommended Questions
+                          Identified Gaps
                           <div className="h-[1px] flex-1 bg-slate-100"></div>
                         </h4>
-                        <ul className="space-y-3">
-                          {aiResult.interviewQuestions?.map((q, i) => (
-                            <motion.li
+
+                        <ul className="space-y-2">
+                          {aiResult.identifiedGaps?.map((gap, i) => (
+                            <li
                               key={i}
-                              className="flex gap-4 text-sm p-4 bg-white rounded-xl border border-slate-100 hover:border-[#0066e0]/30 transition-all shadow-sm"
-                              variants={{ hidden: { opacity: 0, y: 5 }, visible: { opacity: 1, y: 0 } }}
+                              className="text-sm bg-white border border-red-100 p-3 rounded-lg text-slate-700 shadow-sm"
                             >
-                              <span className="text-[#0066e0] font-black">0{i + 1}</span>
-                              <span className="text-slate-700 font-medium leading-snug">{q}</span>
-                            </motion.li>
+                              ⚠ {gap}
+                            </li>
                           ))}
                         </ul>
                       </motion.section>
 
-                      {/* Analysis Metadata - NEW */}
-                      <motion.div
-                        className="flex justify-between items-center text-xs text-slate-400 pt-4 border-t border-slate-100"
+                      {/* Interview Questions */}
+                      <motion.section
                         variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
                       >
-                        <span>Analyzed: {aiResult.analyzedAt ? new Date(aiResult.analyzedAt).toLocaleString() : "N/A"}</span>
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${
-                          aiResult.status === "SUCCESS" ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-500"
-                        }`}>
-                          {aiResult.status || "PENDING"}
-                        </span>
-                      </motion.div>
+                        <h4 className="text-slate-400 text-[11px] font-black uppercase mb-3 tracking-[0.2em] flex items-center gap-3">
+                          Recommended Questions
+                          <div className="h-[1px] flex-1 bg-slate-100"></div>
+                        </h4>
 
-                      {/* Close Button */}
+                        <ul className="space-y-3">
+                          {aiResult.interviewQuestions?.map((q, i) => (
+                            <li
+                              key={i}
+                              className="flex gap-4 text-sm p-4 bg-white rounded-xl border border-slate-100 hover:border-[#0066e0]/30 transition-all shadow-sm"
+                            >
+                              <span className="text-[#0066e0] font-black">
+                                0{i + 1}
+                              </span>
+
+                              <span className="text-slate-700 font-medium leading-snug">
+                                {q}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </motion.section>
+
+                      {/* Disclaimer */}
+                      <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs p-4 rounded-xl">
+                        <strong>AI Advisory:</strong> {aiResult.disclaimer}
+                      </div>
+
+                      {/* Close */}
                       <motion.button
                         onClick={() => setAnalysisModalOpen(false)}
                         className="w-full bg-[#0066e0] hover:bg-[#0052b3] text-white font-bold py-4 rounded-2xl transition-all mt-4 shadow-lg shadow-[#0066e0]/25 active:scale-[0.98]"
-                        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
                       >
                         Done Reading
                       </motion.button>
+
                     </motion.div>
+
                   ) : (
                     <div className="text-center py-10 text-slate-400">
                       Analysis data unavailable.
                     </div>
                   )}
+
                 </div>
               </div>
             </motion.div>
