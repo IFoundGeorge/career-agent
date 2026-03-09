@@ -168,12 +168,111 @@ export async function POST(req) {
           throw new Error("AI analysis failed");
         }
 
-        results.push({ success: true, fullName: application.fullName });
-      } catch (err) {
-        console.error("Processing error:", err);
-        if (application) {
-          application.status = "failed";
-          await application.save();
+        const ut = new UTApi({ apiKey: process.env.UPLOADTHING_SECRET });
+        const workatoWebhookUrl = process.env.WORKATO_URL;
+
+        for (const file of files) {
+            let application = null;
+
+            try {
+                const buffer = Buffer.from(await file.arrayBuffer());
+
+                // Upload to UploadThing
+                const uploadResponse = await ut.uploadFiles([new File([buffer], file.name, { type: file.type })]);
+                const fileUrl = uploadResponse?.[0]?.data?.ufsUrl;
+                if (!fileUrl) throw new Error("Upload failed");
+
+                // Extract name from filename
+                const originalName = file.name.replace(/\.[^/.]+$/, "");
+                const extractedFullName = originalName.replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim() || "Unknown Applicant";
+
+                // Create DB record with status = "processing"
+                application = await Application.create({
+                    fullName: extractedFullName,
+                    email: "",
+                    resumeText: "",
+                    resumeFileLink: fileUrl,
+                    status: "processing",
+                });
+
+                // Parse PDF
+                const resumeTextRaw = await new Promise((resolve, reject) => {
+                    let text = "";
+                    new PdfReader().parseBuffer(buffer, (err, item) => {
+                        if (err) reject(err);
+                        else if (!item) resolve(text);
+                        else if (item.text) text += item.text + " ";
+                    });
+                });
+
+                if (!resumeTextRaw || resumeTextRaw.trim() === "") throw new Error("No parsed text returned");
+
+                const cleanedText = resumeTextRaw
+                    .replace(/\r?\n/g, " ")
+                    .replace(/([a-zA-Z0-9])\s+(?=[a-zA-Z0-9@.])/g, "$1")
+                    .replace(/\s*@\s*/g, "@")
+                    .replace(/\s*\.\s*/g, ".")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+                const emailRegex = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/;
+                const extractedEmail = cleanedText.match(emailRegex)?.[0] || "no-email-found";
+
+                // Update email and resumeText, leave status as "processing"
+                application.email = extractedEmail;
+                application.resumeText = cleanedText;
+                await application.save();
+
+                // Notify Workato webhook (does not change status)
+                let workatoResponseText = null;
+                const workatoPayload = {
+                    applicationId: application._id,
+                    fullName: application.fullName,
+                    email: application.email,
+                    resumeFileLink: application.resumeFileLink,
+                    resumeText: application.resumeText,
+                    status: application.status,
+                };
+
+                try {
+                    const workatoResponse = await fetch(workatoWebhookUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "api-token": process.env.WORKATO_API
+                        },
+                        body: JSON.stringify(workatoPayload),
+                    });
+                    workatoResponseText = await workatoResponse.text();
+                    console.log("[Workato] Sent payload:", workatoPayload);
+                    console.log("[Workato] Response:", workatoResponseText);
+                } catch (err) {
+                    console.error("Failed to notify Workato:", err);
+                }
+
+                results.push({
+                    success: true,
+                    applicationId: application._id,
+                    fullName: application.fullName,
+                    email: application.email,
+                    status: application.status,
+                    resumeFileLink: application.resumeFileLink,
+                    resumeText: application.resumeText,
+                    workatoPayload,
+                    workatoResponse: workatoResponseText,
+                });
+            } catch (fileError) {
+                console.error("File error:", fileError);
+                if (application) {
+                    application.status = "failed";
+                    await application.save();
+                }
+                results.push({
+                    success: false,
+                    fileName: file.name,
+                    error: fileError.message,
+                });
+            }
         }
         results.push({ success: false, fileName: file.name, error: err.message });
       }
