@@ -47,6 +47,16 @@ export default function Page() {
   const [resumes, setResumes] = useState([]); // your resume data
   const [sortOption, setSortOption] = useState("latest"); // default: latest to oldest
 
+  // Job Config State
+  const [jobModalOpen, setJobModalOpen] = useState(false);
+
+  const [jobTitle, setJobTitle] = useState("");         // e.g., "Software Engineer"
+  const [jobDescription, setJobDescription] = useState(""); // e.g., "Handles frontend/backend tasks"
+  const latestJob = {
+  jobTitle: jobTitle || "Open Position",
+  jobDescription: jobDescription || "No description provided",
+};
+
   // ---------- Sorted & Filtered ----------
   // ---------- Derived Variables ----------
   const ITEMS_PER_PAGE = 10;
@@ -123,6 +133,16 @@ export default function Page() {
   useEffect(() => {
     fetchApplications();
   }, []); // ok: empty deps array, runs only once
+
+  useEffect(() => {
+  const savedJob = localStorage.getItem("jobRole");
+
+  if (savedJob) {
+    const parsed = JSON.parse(savedJob);
+    setJobTitle(parsed.jobTitle || "");
+    setJobDescription(parsed.jobDescription || "");
+  }
+}, []);
 
   async function fetchApplications() {
     setAppsLoading(true);
@@ -232,8 +252,8 @@ export default function Page() {
     setLoading(true);
     setProgress(0);
 
-    let successCount = 0; // Track how many actually uploaded
-    let duplicateCount = 0; // Track how many were skipped
+    let successCount = 0;
+    let duplicateCount = 0;
 
     let fakeProgress = 0;
     const interval = setInterval(() => {
@@ -247,6 +267,10 @@ export default function Page() {
         const fd = new FormData();
         fd.append("resume", file);
 
+        // ✅ Use frontend state for job role
+        fd.append("jobTitle", jobTitle || "Unknown Role");
+        fd.append("jobRequirements", jobDescription || "No description provided");
+
         const res = await fetch("/api/applications", { method: "POST", body: fd });
         const data = await res.json();
 
@@ -256,7 +280,6 @@ export default function Page() {
 
         if (fileResult && !fileResult.success) {
           if (fileResult.isDuplicate) {
-            // Specific toast for this file
             showToast(`${file.name} already exists.`, "info");
             duplicateCount++;
             continue;
@@ -265,7 +288,6 @@ export default function Page() {
           }
         }
 
-        // If we got here, it was a real success
         successCount++;
       }
 
@@ -274,7 +296,6 @@ export default function Page() {
       await fetchApplications();
       setFiles([]);
 
-      // --- Smart Final Message ---
       if (successCount > 0) {
         showToast(`Successfully processed ${successCount} resume(s).`, "success");
       } else if (duplicateCount > 0 && successCount === 0) {
@@ -474,47 +495,36 @@ export default function Page() {
                 </button>
               </section>
 
-              {/* Recently Added */}
+              {/* Latest Job Role */}
               <section className="bg-white rounded-xl shadow-sm p-6 animate-slide-in animate-delay-400">
-                <h2 className="text-lg font-semibold mb-4">Recently Added</h2>
+                <h2 className="text-lg font-semibold mb-4">Latest Job Role</h2>
 
                 {appsLoading ? (
                   <div className="space-y-3">
-                    {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="h-12 w-full" />
-                    ))}
+                    <Skeleton className="h-6 w-1/2" />
+                    <Skeleton className="h-20 w-full" />
                   </div>
-                ) : recentApplications.length ? (
-                  <ul className="space-y-3">
-                    {recentApplications.map((app) => (
-                      <li
-                        key={app._id}
-                        className="border rounded-lg px-3 py-2 flex justify-between items-center"
-                      >
-                        <div>
-                          <div className="text-sm font-medium truncate">
-                            {app.fullName}
-                          </div>
-                          <div className="text-xs text-slate-500 truncate">
-                            {app.email}
-                          </div>
-                          <div className="text-xs text-slate-400 mt-1">
-                            {new Date(app.createdAt).toLocaleString(undefined, {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                            })}
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
                 ) : (
-                  <div className="text-sm text-slate-400 text-center py-6">
-                    No resumes yet
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-slate-400">Job Title</p>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {latestJob.jobTitle}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400">Job Description</p>
+                      <p className="text-sm text-slate-600 whitespace-pre-line">
+                        {latestJob.jobDescription}
+                      </p>
+                    </div>
+
+                    {latestJob.createdAt && (
+                      <div className="text-xs text-slate-400 pt-2">
+                        Last updated: {new Date(latestJob.createdAt).toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
@@ -663,6 +673,12 @@ export default function Page() {
             {/* RIGHT */}
             <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 w-full">
+                <button
+                  onClick={() => setJobModalOpen(true)}
+                  className="w-full sm:w-auto px-4 py-2 bg-[#F29035] text-white rounded-lg font-medium shadow-sm hover:bg-[#d97706] transition-all"
+                >
+                  Set Job Role
+                </button>
                 {/* Title */}
                 <h2 className="text-lg font-semibold flex-shrink-0">
                   Recently Uploaded Resumes
@@ -1230,6 +1246,114 @@ export default function Page() {
           </>
         )
       }
+      {/* Job Configuration Modal */}
+      <AnimatePresence>
+        {jobModalOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              onClick={() => setJobModalOpen(false)}
+              className="fixed inset-0 bg-black/40 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            />
+
+            {/* Modal */}
+            <motion.div
+              className="fixed inset-0 flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+            >
+              <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl p-6">
+
+                <h3 className="text-lg font-semibold mb-4">
+                  Configure Job Role
+                </h3>
+
+                {/* Job Title */}
+                <div className="mb-4">
+                  <label className="text-sm font-medium text-slate-600">
+                    Job Title
+                  </label>
+                  <input
+                    type="text"
+                    value={jobTitle}
+                    onChange={(e) => setJobTitle(e.target.value)}
+                    className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#0049af]"
+                    placeholder="e.g. Customer Support Specialist"
+                  />
+                </div>
+
+                {/* Job Description */}
+                <div className="mb-4">
+                  <label className="text-sm font-medium text-slate-600">
+                    Job Description
+                  </label>
+                  <textarea
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    rows={4}
+                    className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#0049af]"
+                    placeholder="Enter job description..."
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-between items-center">
+
+                  {/* Reset */}
+                  <button
+                    onClick={() => {
+                      setJobTitle("Open Position");
+                      setJobDescription(""); {/* <-- Use jobDescription */ }
+                    }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Reset
+                  </button>
+
+                  {/* Right buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setJobModalOpen(false)}
+                      className="px-4 py-2 text-sm border rounded hover:bg-slate-100"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (!jobTitle.trim() || !jobDescription.trim()) {
+                          showToast("Please fill in job title and description", "error");
+                          return;
+                        }
+
+                        // ✅ SAVE to localStorage
+                        localStorage.setItem(
+                          "jobRole",
+                          JSON.stringify({
+                            jobTitle,
+                            jobDescription,
+                          })
+                        );
+
+                        showToast("Job configuration saved!", "success");
+                        setJobModalOpen(false);
+                      }}
+                      className="px-4 py-2 text-sm bg-[#0049af] text-white rounded hover:bg-[#003580]"
+                    >
+                      Save
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div >
   );
 }

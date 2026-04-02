@@ -40,6 +40,14 @@ const ApplicationSchema = new mongoose.Schema(
       enum: ["uploaded", "processing", "analyzed", "completed", "failed"],
       default: "uploaded",
     },
+    jobTitle: {
+      type: String,
+      default: process.env.DEFAULT_JOB_TITLE || "Open Position",
+    },
+    jobRequirements: {
+      type: String,
+      default: process.env.DEFAULT_JOB_REQUIREMENTS || "",
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },

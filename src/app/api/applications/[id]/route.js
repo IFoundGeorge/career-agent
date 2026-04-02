@@ -8,8 +8,7 @@ const utapi = new UTApi();
 
 export async function PATCH(req, { params }) {
   await connectDB();
-  const { id } = await params; // ✅ FIXED
-
+  const { id } = await params; 
   try {
     const body = await req.json();
     const updatedApp = await Application.findByIdAndUpdate(id, body, { new: true });
@@ -30,7 +29,6 @@ export async function POST(req, { params }) {
   const { id } = await params;
 
   try {
-    // Find the analysis by applicationId
     const analysisData = await AIAnalysis.findOne({ applicationId: id });
 
     if (!analysisData) {
@@ -38,7 +36,6 @@ export async function POST(req, { params }) {
       return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     }
 
-    // Send back the whole document so fitScore, summary, etc. are available
     return NextResponse.json({ 
       success: true, 
       analysis: analysisData 
@@ -48,7 +45,6 @@ export async function POST(req, { params }) {
   }
 }
 
-// --- DELETE: REMOVE APP, FILE, AND ANALYSIS ---
 export async function DELETE(req, { params }) {
   await connectDB();
   const { id } = await params;
@@ -69,7 +65,6 @@ export async function DELETE(req, { params }) {
       }
     }
 
-    // Clean up both the analysis and the application from MongoDB
     await AIAnalysis.deleteMany({ applicationId: id });
     await app.deleteOne();
 
@@ -80,7 +75,6 @@ export async function DELETE(req, { params }) {
   }
 }
 
-// --- GET: FETCH SINGLE APP ---
 export async function GET(req, { params }) {
     await connectDB();
     const { id } = await params;

@@ -31,7 +31,6 @@ export async function POST(req) {
   try {
     const contentType = req.headers.get("content-type") || "";
 
-    // 1️⃣ Handle JSON status updates
     if (contentType.includes("application/json")) {
       const data = await req.json();
       const { applicationId, status, ...updates } = data;
@@ -46,9 +45,10 @@ export async function POST(req) {
       return NextResponse.json({ success: !!application, application });
     }
 
-    // 2️⃣ Handle PDF uploads via FormData
     const formData = await req.formData();
     const files = formData.getAll("resume");
+    const jobTitle = formData.get("jobTitle") || process.env.DEFAULT_JOB_TITLE;
+    const jobDescription = formData.get("jobRequirements") || process.env.DEFAULT_JOB_REQUIREMENTS;
     if (!files || files.length === 0)
       return NextResponse.json({ success: false, error: "No resumes uploaded" }, { status: 400 });
 
@@ -67,19 +67,16 @@ export async function POST(req) {
         const buffer = Buffer.from(await file.arrayBuffer());
         const fileHash = crypto.createHash("sha256").update(buffer).digest("hex");
 
-        // ✅ Check for duplicates
         const existingApp = await Application.findOne({ fileHash });
         if (existingApp) {
           results.push({ success: false, fileName: file.name, error: "Duplicate resume.", isDuplicate: true });
           continue;
         }
 
-        // ✅ Upload file to UploadThing
         const uploadResponse = await ut.uploadFiles([new File([buffer], file.name, { type: file.type })]);
         const fileUrl = uploadResponse?.[0]?.data?.ufsUrl;
         if (!fileUrl) throw new Error("Upload failed");
 
-        // ✅ OCR.space API
         const ocrForm = new FormData();
         ocrForm.append("apikey", process.env.OCR_SPACE_KEY);
         ocrForm.append("url", fileUrl);
@@ -91,7 +88,6 @@ export async function POST(req) {
         let extractedText = (ocrResult.ParsedResults?.[0]?.ParsedText || "").trim();
         if (!extractedText || extractedText.length < 10) throw new Error("OCR failed or PDF unreadable.");
 
-        // ✅ Clean extracted text
         extractedText = extractedText
           .replace(/\n/g, " ")
           .replace(/\s{2,}/g, " ")
@@ -100,11 +96,9 @@ export async function POST(req) {
           .replace(/Mith|Sen-ed|fmrn|ALIM/g, "")
           .trim();
 
-        // ✅ Extract email
         const emailRegex = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/;
         const extractedEmail = extractedText.match(emailRegex)?.[0] || "no-email-found";
 
-        // ✅ Save application with status = processing
         application = await Application.create({
           fullName: file.name.replace(/\.[^/.]+$/, "").replace(/[_\-]+/g, " ").trim(),
           email: extractedEmail,
@@ -112,9 +106,10 @@ export async function POST(req) {
           resumeFileLink: fileUrl,
           status: "processing",
           fileHash,
+          jobTitle,
+          jobDescription,
         });
 
-        // ✅ Notify Workato
         const workatoResponse = await fetch(workatoWebhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json", "api-token": process.env.WORKATO_API },
@@ -123,8 +118,8 @@ export async function POST(req) {
             fullName: application.fullName,
             resumeText: extractedText,
             resumeFileLink: fileUrl,
-            jobTitle: process.env.DEFAULT_JOB_TITLE || "Software Engineer",
-            jobRequirements: process.env.DEFAULT_JOB_REQUIREMENTS || "",
+            jobTitle,        
+            jobRequirements: jobDescription, 
           }),
         });
 
@@ -133,7 +128,6 @@ export async function POST(req) {
 
         const outerJson = JSON.parse(workatoResponseText);
 
-        // ✅ Handle AI Analysis
         if (outerJson?.summary) {
           const cleanJsonString = outerJson.summary.replace(/=>/g, ":").replace(/\bnil\b/g, "null");
           let aiData;
@@ -168,7 +162,6 @@ export async function POST(req) {
           throw new Error("AI analysis failed");
         }
 
-        // ✅ Push successful result
         results.push({
           success: true,
           applicationId: application._id,
