@@ -46,6 +46,7 @@ export default function Page() {
   const [selectedResume, setSelectedResume] = useState(null);
   const [resumes, setResumes] = useState([]); // your resume data
   const [sortOption, setSortOption] = useState("latest"); // default: latest to oldest
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Job Config State
   const [jobModalOpen, setJobModalOpen] = useState(false);
@@ -672,6 +673,13 @@ export default function Page() {
 
             {/* RIGHT */}
             <section className="w-full lg:flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col">
+              {/* Title */}
+                <h2 className="text-lg font-semibold flex-shrink-0">
+                  Recently Uploaded Resumes
+                </h2>
+                <h2 className="text-sm text-slate-500 mb-4">
+
+                </h2>
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 w-full">
                 <button
                   onClick={() => setJobModalOpen(true)}
@@ -679,11 +687,7 @@ export default function Page() {
                 >
                   Set Job Role
                 </button>
-                {/* Title */}
-                <h2 className="text-lg font-semibold flex-shrink-0">
-                  Recently Uploaded Resumes
-                </h2>
-
+            
                 {/* Search Input with SVG */}
                 <div className="relative flex-1 w-full sm:w-64">
                   <input
